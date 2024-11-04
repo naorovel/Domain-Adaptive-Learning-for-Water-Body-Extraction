@@ -1,13 +1,12 @@
 # Domain-Adaptive Learning for Water Body Extraction
 
 ## Setup
-This repository is Dockerized - meaning that all dependencies are contained inside a Docker container. This makes it easy to run and install necessary dependencies for this repository without worrying about version management between team members. 
+All dependencies for this repository are contained inside `environment.yml`. This makes it easy to run and install necessary dependencies for this repository without worrying about version management between team members. If you need to add dependencies, please update the  `environment.yml` using `conda env update --file environment.yml --prune`. 
 
-If us
+To create the environment needed to run this repository, please ensure that your machine supports CUDA 11.6 and above. This can be checked by running `...`. 
 
-To build the Docker image, run the following in the terminal: 
-`docker build -t domain_adaptive_water_body_extraction .`
+Then we can create the environment by running: 
+`conda create -f environment.yml`. 
 
-To run the code through the main entrypoint in the Docker container: 
-`docker run -p 5000:5000 domain_adaptive_water_body_extraction`
-
+Activate the environment by running: 
+`conda activate DALWBE`.
