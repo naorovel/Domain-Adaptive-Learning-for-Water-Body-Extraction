@@ -16,7 +16,7 @@ class SatelliteDataset(Dataset):
     """
     def __init__(self, feature_dir, label_dir, weight_dir, tiles, mu=None, sigma=None, sample=None):
         # Read Feature Tiles
-        feature_files = [f"{feature_dir}/tile_{str(x).rjust(3, '0')}.tif" for x in tiles]
+        feature_files = [f"{feature_dir}/tile_{str(x).rjust(4, '0')}.tif" for x in tiles]
         feature_files = [feature_files[i] for i in sample] if sample is not None else feature_files
         feature_tiles = read_files(feature_files)
 
@@ -26,7 +26,7 @@ class SatelliteDataset(Dataset):
         self.features = normalize(feature_tiles, self.mu, self.sigma)
 
         # Read Mask Tiles
-        mask_files = [f"{label_dir}/tile_{str(x).rjust(3, '0')}.tif" for x in tiles]
+        mask_files = [f"{label_dir}/tile_{str(x).rjust(4, '0')}.tif" for x in tiles]
         mask_files = [mask_files[i] for i in sample] if sample is not None else mask_files
         self.masks = read_files(mask_files)
 
@@ -34,7 +34,7 @@ class SatelliteDataset(Dataset):
         if weight_dir is None:
             self.weights = torch.ones_like(self.masks)
         else:
-            weight_files = [f"{weight_dir}/tile_{str(x).rjust(3, '0')}.tif" for x in tiles]
+            weight_files = [f"{weight_dir}/tile_{str(x).rjust(4, '0')}.tif" for x in tiles]
             weight_files = [weight_files[i] for i in sample] if sample is not None else weight_files
             self.weights = read_files(weight_files)
 
@@ -264,5 +264,23 @@ merge_tiles_to_tif(label_tiles_test, label_tiles_mergeback_test, 5120, 5120, 512
 # Check if the merged tif has the same pixel values as the original tif.
 file1 = "../data/CN/label.tif"
 file2 = "../data/CN/tiles/merge/merged_label.tif"
-are_same, message = compare_tif_images(file1, file2)
-print(message)
+#are_same, message = compare_tif_images(file1, file2)
+#print(message)
+
+dataset = SatelliteDataset(
+    feature_dir=feature_tiles_test,
+    label_dir=label_tiles_test,
+    weight_dir=None,
+    tiles=range(0, 100),
+    mu=None,
+    sigma=None,
+    sample=None
+)
+
+print("Number of tiles:", len(dataset))
+print("Feature tiles shape:", dataset.features.shape)
+print("Mask tiles shape:", dataset.masks.shape)
+
+features, masks, _ = dataset[0]
+print("Features at index 0:", features)
+print("Masks at index 0:", masks)
