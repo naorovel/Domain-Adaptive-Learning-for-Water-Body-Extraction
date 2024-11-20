@@ -106,5 +106,8 @@ dependencies:
   - libstdcxx=14.2.0=hc0a3c3a_1
   - libstdcxx-ng=14.2.0=h4852527_1
   - libtiff=4.7.0=he137b08_1
-  - rasterio
-  - numpy
+  - rasterio  # For handling GeoTIFFs
+  - numpy  # For numerical operations
+  - glob2  # For working with file globbing
+  - torch  # For PyTorch
+  - torchvision  # For PyTorch vision utilities
