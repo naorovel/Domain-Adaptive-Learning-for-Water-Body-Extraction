@@ -8,12 +8,11 @@ from rasterio.windows import Window
 import glob
 from rasterio.crs import CRS
 from rasterio.transform import from_origin
+import random
+from os.path import basename
 
 
 class SatelliteDataset(Dataset):
-    ##############################
-    #This Class is Not tested yet#
-    ##############################
     """
     Dataset class. Convert tif files (tiles) into a dataset for model training/testing.
     """
@@ -65,6 +64,7 @@ def read_and_split_tif(file_path, output_dir, tile_size):
     Returns:
     - None. Check output_file path for output.
     """
+    print("Reading and splitting into tiles...")
     data, transform, crs = read_tif_file(file_path)
     # Get properties of the data
     _, height, width = data.shape
@@ -100,7 +100,7 @@ def read_and_split_tif(file_path, output_dir, tile_size):
             ) as dst:
                 dst.write(tile)
             tile_count += 1
-
+    print("Tile splitting Done.")
 
 def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height, tile_size):
     """
@@ -233,12 +233,98 @@ def trim_tif_based_on_tile_size(tif_path, output_path, tif_height, tif_width, ti
 
     print(f"Trimmed .tif saved to {output_path}")
 
+def random_sample_from_tile(tile_path, output_dir, point, subimage_width, subimage_height):
+    """
+    Cuts a sub-image from a given point and saves it to the output directory.
+    
+    Args:
+        tile_path (str): Path to the input TIFF image.
+        output_dir (str): Directory to save the sub-images.
+        point (tuple): (x, y) coordinates of the top-left corner of the sub-image.
+        subimage_width (int): Width of the sub-image.
+        subimage_height (int): Height of the sub-image.
+    """
+    # Open the TIFF image
+    dataset = gdal.Open(tile_path)
+    if dataset is None:
+        raise FileNotFoundError(f"Could not open file: {tile_path}")
+    
+    x, y = point
+    band = dataset.GetRasterBand(1)  # Assume the first band is used
+    subimage = band.ReadAsArray(x, y, subimage_width, subimage_height)
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Save sub-image to a new TIFF file
+    output_path = os.path.join(output_dir, f"subimage_{x}_{y}.tif")
+    driver = gdal.GetDriverByName("GTiff")
+    out_dataset = driver.Create(output_path, subimage_width, subimage_height, 1, band.DataType)
+    out_dataset.GetRasterBand(1).WriteArray(subimage)
+    out_dataset.FlushCache()
+    out_dataset = None  # Close the file
+    dataset = None  # Close the input file
+
+def process_all_tiles(folder_path, output_base_dir, point, subimage_width, subimage_height):
+    """
+    Processes all TIFF tiles in a folder, calling random_sample_from_tile on each,
+    and saves the outputs to directories named after the tile IDs.
+    
+    Args:
+        folder_path (str): Path to the folder containing TIFF tiles.
+        output_base_dir (str): Base directory for saving outputs.
+        point (tuple): (x, y) coordinates of the top-left corner of the sub-image.
+        subimage_width (int): Width of the sub-image.
+        subimage_height (int): Height of the sub-image.
+    """
+    # Regex pattern to extract tile ID from filenames like tile_0000.tif
+    tile_pattern = re.compile(r"tile_(\d+)\.tif")
+    
+    # Iterate over all files in the folder
+    for tile_filename in os.listdir(folder_path):
+        # Match files with the tile pattern
+        match = tile_pattern.match(tile_filename)
+        if not match:
+            continue
+        
+        # Extract tile ID
+        tile_id = match.group(1)
+        
+        # Full path to the current tile
+        tile_path = os.path.join(folder_path, tile_filename)
+        
+        # Output directory for the current tile
+        output_dir = os.path.join(output_base_dir, tile_id)
+        
+        # Call random_sample_from_tile for the current tile
+        try:
+            random_sample_from_tile(tile_path, output_dir, point, subimage_width, subimage_height)
+            print(f"Processed tile {tile_filename} and saved to {output_dir}")
+        except RasterioIOError as e:
+            print(f"Error reading tile {tile_filename}: {e}")
+        except Exception as e:
+            print(f"Error processing tile {tile_filename}: {e}")
 
 '''
 ----------------
 Helper Functions
 ----------------
 '''
+def get_tif_size(tif_path):
+    """
+    Get the width and height of a TIFF image.
+    
+    Args:
+        tif_path (str): Path to the TIFF file.
+        
+    Returns:
+        tuple: (width, height) of the image in pixels.
+    """
+    with rasterio.open(tif_path) as dataset:
+        width = dataset.width
+        height = dataset.height
+    return width, height
+
 def normalize(x, mu=None, sigma=None):
     return (x - mu) / sigma
 
@@ -308,6 +394,43 @@ def compare_tif_images(tif1, tif2):
     except Exception as e:
         return False, f"Error during comparison: {e}"
 
+def check_subimage_matches_original(original_path, subimage_path, point, subimage_width, subimage_height):
+    """
+    Checks if the pixels in the sub-image match the original image pixels in the corresponding range.
+    
+    Args:
+        original_path (str): Path to the original TIFF image.
+        subimage_path (str): Path to the saved sub-image TIFF.
+        point (tuple): (x, y) coordinates of the top-left corner of the sub-image in the original image.
+        subimage_width (int): Width of the sub-image.
+        subimage_height (int): Height of the sub-image.
+    
+    Returns:
+        bool: True if the sub-image matches the original image, False otherwise.
+    """
+    x, y = point
+    
+    # Open the original image
+    with rasterio.open(original_path) as original:
+        window = rasterio.windows.Window(x, y, subimage_width, subimage_height)
+        original_pixels = original.read(window=window)
+    
+    # Open the sub-image
+    with rasterio.open(subimage_path) as subimage:
+        subimage_pixels = subimage.read()
+    
+    # Check if the shapes match
+    if original_pixels.shape != subimage_pixels.shape:
+        print(f"Shape mismatch: Original {original_pixels.shape}, Sub-image {subimage_pixels.shape}")
+        return False
+    
+    # Check if the pixel values match
+    if not np.array_equal(original_pixels, subimage_pixels):
+        print("Pixel values do not match.")
+        return False
+    
+    return True
+
 def fix_geotransform(input_tif, output_tif):
     """
     Fix the geotransform to set a "bottom-up" raster orientation.
@@ -334,26 +457,148 @@ def show_geotransform(tif_path):
     with rasterio.open(tif_path) as src:
         print(f"File: {tif_path}")
         print(f"Geotransform: {src.transform}")
+
+def sample_random_points(image_width, image_height, subimage_width, subimage_height, num_samples=9, rng=None):
+    """
+    Randomly samples points within valid ranges for sub-image extraction using a random number generator instance.
+    
+    Args:
+        image_width (int): Width of the original image.
+        image_height (int): Height of the original image.
+        subimage_width (int): Width of the sub-image.
+        subimage_height (int): Height of the sub-image.
+        num_samples (int): Number of points to sample.
+        rng (random.Random, optional): A random number generator instance.
+    
+    Returns:
+        list of tuples: List of (x, y) coordinate points.
+    """
+    if rng is None:
+        rng = random
+    
+    max_x = image_width - subimage_width
+    max_y = image_height - subimage_height
+    points = [(rng.randint(0, max_x), rng.randint(0, max_y)) for _ in range(num_samples)]
+    return points
+
+def random_samples_from_tile(tile_path, output_dir, points, subimage_width, subimage_height):
+    """
+    Cuts sub-images from a given list of points and saves them to the output directory using rasterio.
+    
+    Args:
+        tile_path (str): Path to the input TIFF image.
+        output_dir (str): Directory to save the sub-images.
+        points (list of tuples): List of (x, y) coordinates of the top-left corners of the sub-images.
+        subimage_width (int): Width of the sub-images.
+        subimage_height (int): Height of the sub-images.
+    """
+    with rasterio.open(tile_path) as dataset:
+        a = basename(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        for b, point in enumerate(points, start=1):
+            x, y = point
+            
+            if x + subimage_width > dataset.width or y + subimage_height > dataset.height:
+                print(f"Skipping point ({x}, {y}) - subimage out of bounds.")
+                continue
+            
+            # Define the window for the sub-image
+            window = Window(x, y, subimage_width, subimage_height)
+            
+            try:
+                # Read all bands using the window
+                subimage = dataset.read(window=window)  # Reads all bands
+            except ValueError:
+                print(f"Skipping point ({x}, {y}) - error reading subimage.")
+                continue
+            
+            # Define output path
+            output_path = os.path.join(output_dir, f"sample_{a}_{b}.tif")
+            
+            # Preserve nodata value
+            nodata_value = dataset.nodata
+            
+            # Save the sub-image
+            with rasterio.open(
+                output_path,
+                'w',
+                driver='GTiff',
+                height=subimage.shape[1],
+                width=subimage.shape[2],
+                count=dataset.count,  # Number of bands
+                dtype=subimage.dtype,
+                crs=dataset.crs,
+                transform=rasterio.windows.transform(window, dataset.transform),
+                nodata=nodata_value,  # Preserve NoData value
+            ) as out_dataset:
+                out_dataset.write(subimage)
+            
+def random_samples_from_tiles(feature_dir, label_dir, output_base_dir, subimage_size, num_samples=9):
+    """
+    Processes corresponding feature and label tiles, generates random samples for each,
+    and saves them in separate output directories.
+
+    Args:
+        feature_dir (str): Path to the folder containing feature tile TIFF files.
+        label_dir (str): Path to the folder containing label tile TIFF files.
+        output_base_dir (str): Base directory to save the sub-image samples.
+        subimage_size (int): Size (width and height) of the sub-images.
+        num_samples (int): Number of random samples to generate per tile.
+    """
+    print("Random sampling from both feature and label tiles...")
+    # Initialize random sample generator
+    random_sample_generator = random.Random(42)
+
+    # Ensure output directories exist
+    output_features_dir = os.path.join(output_base_dir, "features")
+    output_labels_dir = os.path.join(output_base_dir, "labels")
+    os.makedirs(output_features_dir, exist_ok=True)
+    os.makedirs(output_labels_dir, exist_ok=True)
+
+    # Process each feature tile
+    for tile_name in os.listdir(feature_dir):
+        if tile_name.endswith(".tif"):  # Ensure it's a TIFF file
+            feature_tile_path = os.path.join(feature_dir, tile_name)
+            label_tile_path = os.path.join(label_dir, tile_name)
+
+            # Check if corresponding label tile exists
+            if not os.path.exists(label_tile_path):
+                print(f"Skipping {tile_name} - corresponding label tile not found.")
+                continue
+
+            # Extract tile ID from the file name
+            tile_id = os.path.splitext(tile_name)[0].split('_')[-1]
+
+            # Define output directories for this tile
+            output_feature_dir = os.path.join(output_features_dir, tile_id)
+            output_label_dir = os.path.join(output_labels_dir, tile_id)
+            os.makedirs(output_feature_dir, exist_ok=True)
+            os.makedirs(output_label_dir, exist_ok=True)
+
+            # Assuming tiles are 512x512
+            random_points = sample_random_points(512, 512, subimage_size, subimage_size,
+                                                 num_samples=num_samples, rng=random_sample_generator)
+
+            # Generate random samples for the feature tile
+            random_samples_from_tile(feature_tile_path, output_feature_dir, random_points, subimage_size, subimage_size)
+
+            # Generate random samples for the label tile
+            random_samples_from_tile(label_tile_path, output_label_dir, random_points, subimage_size, subimage_size)
+    print("Random sampling Done.")
+
 '''
 -------------
 Testing Field
 -------------
 '''
 # Training dataset
-feature_dir_train = "../data/CN/feature.tif"
-label_dir_train = "../data/CN/label.tif"
+feature_dir_train = "../data/CN/feature_trimmed.tif"
+label_dir_train = "../data/CN/label_trimmed.tif"
 feature_tiles_train = "../data/CN/tiles/features"
 label_tiles_train = "../data/CN/tiles/labels"
 feature_tiles_mergeback_train = "../data/CN/tiles/merge/merged_feature.tif"
 label_tiles_mergeback_train = "../data/CN/tiles/merge/merged_label.tif"
-
-'''
-read_and_split_tif(feature_dir_train, feature_tiles_train, 512)
-read_and_split_tif(label_dir_train, label_tiles_train, 512)
-
-merge_tiles_to_tif(feature_tiles_train, feature_tiles_mergeback_train, 20982, 20982, 512)
-merge_tiles_to_tif(label_tiles_train, label_tiles_mergeback_train, 20982, 20982, 512)
-'''
 
 # Test dataset
 feature_dir_test = "../data/BZ/feature.tif"
@@ -362,6 +607,18 @@ feature_tiles_test = "../data/BZ/tiles/features"
 label_tiles_test = "../data/BZ/tiles/labels"
 feature_tiles_mergeback_test = "../data/BZ/tiles/merge/merged_feature.tif"
 label_tiles_mergeback_test = "../data/BZ/tiles/merge/merged_label.tif"
+
+
+
+# splite and merge back -- training 
+'''
+read_and_split_tif(feature_dir_train, feature_tiles_train, 512)
+read_and_split_tif(label_dir_train, label_tiles_train, 512)
+
+merge_tiles_to_tif(feature_tiles_train, feature_tiles_mergeback_train, 20480, 20480, 512)
+merge_tiles_to_tif(label_tiles_train, label_tiles_mergeback_train, 20480, 20480, 512)
+'''
+# splite and merge back -- test
 '''
 read_and_split_tif(feature_dir_test, feature_tiles_test, 512)
 read_and_split_tif(label_dir_test, label_tiles_test, 512)
@@ -369,34 +626,16 @@ read_and_split_tif(label_dir_test, label_tiles_test, 512)
 merge_tiles_to_tif(feature_tiles_test, feature_tiles_mergeback_test, 5120, 5120, 512)
 merge_tiles_to_tif(label_tiles_test, label_tiles_mergeback_test, 5120, 5120, 512)
 '''
-# Check if the merged tif has the same pixel values as the original tif.
-#file1 = "../data/CN/label.tif"
 
-
-#show_tif_image_size(file1)
-#show_tif_image_size(file2)
-
-
-
-
-#show_geotransform("../data/CN/2.tif")
-
-
+# compare if 2 images are the same
 '''
-set_geotransform_to_match(
-    input_tif="../data/CN/feature_trim.tif",
-    reference_tif="../data/CN/feature.tif",
-    output_tif="../data/CN/feature_trim_aligned.tif"
-)
-'''
-
-# Check the geotransform for both images
 file1 = "../data/CN/feature.tif"
 file2 = "../data/CN/corrected_geotransform.tif"
 are_same, message = compare_tif_images(file1, file2)
 print(message)
+'''
 
-
+# create database
 '''
 dataset = SatelliteDataset(
     feature_dir=feature_tiles_test,
@@ -417,11 +656,17 @@ print("Features at index 0:", features)
 print("Masks at index 0:", masks)
 '''
 
-#trim_tif_based_on_tile_size(feature_dir_train, "../data/CN/feature_cut.tif", 20982, 20982, 512, 512, True)
-#trim_tif_based_on_tile_size(label_dir_train, "../data/CN/label_cut.tif", 20982, 20982, 512, 512, False)
+# random sampling from a sigle tile (test purpose)
+'''
+random_sample_generator = random.Random(42)
+points_test = sample_random_points(512, 512, 256, 256, num_samples=9, rng=random_sample_generator)
 
-#read_and_split_tif(output_path, feature_tiles_train, 512)
-#merge_tiles_to_tif(feature_tiles_train, feature_tiles_mergeback_train, 20480, 20480, 512)
+#print("Points from first call:", points_test)
+tile_path1 = "../data/CN/tiles/features/tile_0020.tif"
+output_dir1 = "../data/CN/random_samples/0020"
+subimage_size=256
+random_samples_from_tile(tile_path1, output_dir1, points_test, subimage_size, subimage_size)
+'''
 
-
-
+# random sampling from all tiles
+random_samples_from_tiles(feature_tiles_train, label_tiles_train,"../data/CN/random_samples", 256, num_samples=9)
