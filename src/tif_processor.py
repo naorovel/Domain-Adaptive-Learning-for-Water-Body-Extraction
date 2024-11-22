@@ -10,6 +10,7 @@ from rasterio.crs import CRS
 from rasterio.transform import from_origin
 import random
 from os.path import basename
+from rasterio.transform import Affine
 
 
 class SatelliteDataset(Dataset):
@@ -51,40 +52,50 @@ class SatelliteDataset(Dataset):
             idx = idx.tolist()
         return (self.features[idx,:,:,:], self.masks[idx,:,:,:], self.weights[idx,:,:,:])
 
-
 def read_and_split_tif(file_path, output_dir, tile_size):
     """
     Split a tif into tiles.
 
     Parameters:
     - file_path: str, path to a tif file.
-    - output_file: str, path to a tiles folder.
+    - output_dir: str, path to a tiles folder.
     - tile_size: int, height=width of a tile.
 
     Returns:
     - None. Check output_file path for output.
     """
     print("Reading and splitting into tiles...")
-    data, transform, crs = read_tif_file(file_path)
+    
+    # Read the GeoTIFF
+    with rasterio.open(file_path) as src:
+        data = src.read()  # Read all bands
+        transform = src.transform  # Original transform
+        crs = src.crs  # Coordinate reference system
+    
     # Get properties of the data
     _, height, width = data.shape
+
     # Prepare to split into tiles
-    
     tile_count = 0
     for i in range(0, height, tile_size):
         for j in range(0, width, tile_size):
             # Compute the size of the current tile
             tile_height = min(tile_size, height - i)
             tile_width = min(tile_size, width - j)
+            
             # Extract a tile
             tile = data[:, i:i + tile_height, j:j + tile_width]
+            
             # Compute the transform for this tile
-            tile_transform = rasterio.transform.from_origin(
-                transform.c + j * transform.a,
-                transform.f + i * transform.e,
-                transform.a,
-                transform.e
+            tile_transform = Affine(
+                transform.a,  # Pixel width
+                transform.b,  # Always 0 for north-up images
+                transform.c + j * transform.a,  # Top-left x-coordinate of the tile
+                transform.d,  # Always 0 for north-up images
+                transform.e,  # Pixel height (negative for top-left origin)
+                transform.f + i * transform.e   # Top-left y-coordinate of the tile
             )
+            
             # Save the tile
             tile_filename = os.path.join(output_dir, f"tile_{tile_count:04d}.tif")
             with rasterio.open(
@@ -100,6 +111,7 @@ def read_and_split_tif(file_path, output_dir, tile_size):
             ) as dst:
                 dst.write(tile)
             tile_count += 1
+    
     print("Tile splitting Done.")
 
 def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height, tile_size):
@@ -116,6 +128,8 @@ def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height
     Returns:
     - None. Check output_file path for output.
     """
+    print("Merging tiles...")
+
     # Collect all tile files and sort them by name
     tile_files = sorted(glob.glob(os.path.join(tile_folder, "*.tif")))
 
@@ -123,7 +137,8 @@ def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height
     with rasterio.open(tile_files[0]) as src:
         num_bands = src.count
         dtype = src.dtypes[0]
-        transform = src.transform  # Transform of the first tile
+        tile_transform = src.transform  # Transform of the first tile
+        crs = src.crs  # CRS from the tiles
 
     # Create an empty array for the merged raster
     merged_array = np.zeros((num_bands, original_height, original_width), dtype=dtype)
@@ -131,7 +146,7 @@ def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height
     # Place tiles into the merged raster
     for idx, tile_file in enumerate(tile_files):
         with rasterio.open(tile_file) as src:
-            tile_data = src.read()
+            tile_data = src.read()  # Read the tile data
             tile_height, tile_width = tile_data.shape[1], tile_data.shape[2]
 
             # Calculate row and column indices based on the file order
@@ -148,11 +163,13 @@ def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height
             merged_array[:, y_start:y_end, x_start:x_end] = tile_data
 
     # Compute the global transform for the merged raster
-    global_transform = rasterio.transform.from_origin(
-        transform.c,  # Top-left X coordinate of the raster
-        transform.f,  # Top-left Y coordinate of the raster
-        transform.a,  # Pixel width
-        transform.e   # Pixel height (usually negative)
+    global_transform = Affine(
+        tile_transform.a,  # Pixel width
+        tile_transform.b,  # Always 0 for north-up images
+        tile_transform.c,  # Top-left x-coordinate of the raster
+        tile_transform.d,  # Always 0 for north-up images
+        tile_transform.e,  # Pixel height (negative for top-left origin)
+        tile_transform.f   # Top-left y-coordinate of the raster
     )
 
     # Write the merged raster to a GeoTIFF file
@@ -164,7 +181,7 @@ def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height
         width=original_width,
         count=num_bands,
         dtype=dtype,
-        crs=None,  # No CRS
+        crs=crs,  # Use CRS from tiles
         transform=global_transform
     ) as dst:
         dst.write(merged_array)
@@ -310,13 +327,12 @@ def process_all_tiles(folder_path, output_base_dir, point, subimage_width, subim
 Helper Functions
 ----------------
 '''
+
 def get_tif_size(tif_path):
     """
     Get the width and height of a TIFF image.
-    
     Args:
-        tif_path (str): Path to the TIFF file.
-        
+        tif_path (str): Path to the TIFF file. 
     Returns:
         tuple: (width, height) of the image in pixels.
     """
@@ -611,6 +627,7 @@ label_tiles_mergeback_test = "../data/BZ/tiles/merge/merged_label.tif"
 
 
 # splite and merge back -- training 
+#read_and_split_tif(label_dir_train, label_tiles_train, 512)
 '''
 read_and_split_tif(feature_dir_train, feature_tiles_train, 512)
 read_and_split_tif(label_dir_train, label_tiles_train, 512)
@@ -631,8 +648,9 @@ merge_tiles_to_tif(label_tiles_test, label_tiles_mergeback_test, 5120, 5120, 512
 '''
 file1 = "../data/CN/feature.tif"
 file2 = "../data/CN/corrected_geotransform.tif"
-are_same, message = compare_tif_images(file1, file2)
+are_same, message = compare_tif_images(feature_dir_train, feature_tiles_mergeback_train)
 print(message)
+
 '''
 
 # create database
@@ -669,4 +687,4 @@ random_samples_from_tile(tile_path1, output_dir1, points_test, subimage_size, su
 '''
 
 # random sampling from all tiles
-random_samples_from_tiles(feature_tiles_train, label_tiles_train,"../data/CN/random_samples", 256, num_samples=9)
+#random_samples_from_tiles(feature_tiles_train, label_tiles_train,"../data/CN/random_samples", 256, num_samples=9)
