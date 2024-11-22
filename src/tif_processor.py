@@ -34,14 +34,6 @@ class SatelliteDataset(Dataset):
         mask_files = [mask_files[i] for i in sample] if sample is not None else mask_files
         self.masks = read_files(mask_files)
 
-        # Read Weight Tiles
-        if weight_dir is None:
-            self.weights = torch.ones_like(self.masks)
-        else:
-            weight_files = [f"{weight_dir}/tile_{str(x).rjust(4, '0')}.tif" for x in tiles]
-            weight_files = [weight_files[i] for i in sample] if sample is not None else weight_files
-            self.weights = read_files(weight_files)
-
         # Confirm that Number of Features Equals Number of Masks
         assert len(feature_files) == len(mask_files), "Error: Number of features does not match number of masks!"
 
@@ -51,7 +43,7 @@ class SatelliteDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        return (self.features[idx,:,:,:], self.masks[idx,:,:,:], self.weights[idx,:,:,:])
+        return (self.features[idx,:,:,:], self.masks[idx,:,:,:])
 
 def read_and_split_tif(file_path, output_dir, tile_size):
     """
