@@ -1,12 +1,28 @@
 # Domain-Adaptive Learning for Water Body Extraction
 
 ## Setup
-All dependencies for this repository are contained inside `environment.yml`. This makes it easy to run and install necessary dependencies for this repository without worrying about version management between team members. If you need to add dependencies, please update the  `environment.yml` using `conda env update --file environment.yml --prune`. 
+All dependencies for this repository are dockerized. This makes it easy to run the repository without dealing with dependency issues. 
 
-To create the environment needed to run this repository, please ensure that your machine supports CUDA 11.6 and above. This can be checked by running `...`. 
+To create the environment needed to run this repository, please install and start Docker first. 
 
-Then we can create the environment by running: 
-`conda create -f environment.yml`. 
+If running the repository in VSCode, install the following extension pack: 
+- Remote Development (ms-vscode-remote.vscode-remote-extensionpack)
 
-Activate the environment by running: 
-`conda activate DALWBE`.
+To build and run the Docker container: 
+- `cmd + shift + P` `"Build and Run Container"`
+
+If VSCode asks for config file options, use the default settings. 
+
+In the terminal of the container, activate the conda environment.  
+`conda activate dalwbe`
+
+The conda environment currently contains the following core dependencies: 
+```
+- gdal/osr/osgeo
+- numpy
+- rasterio
+- pytorch-lightning
+- pillow
+```
+
+It is easiest to work on the repository inside of the Docker container to avoid dependency clashes. 
