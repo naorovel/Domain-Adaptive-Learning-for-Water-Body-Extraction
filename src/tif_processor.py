@@ -11,7 +11,8 @@ from rasterio.transform import from_origin
 import random
 from os.path import basename
 from rasterio.transform import Affine
-
+from FDA.FDA import apply_fda_and_save
+import shutil
 
 class SatelliteDataset(Dataset):
     """
@@ -322,6 +323,67 @@ def process_all_tiles(folder_path, output_base_dir, point, subimage_width, subim
         except Exception as e:
             print(f"Error processing tile {tile_filename}: {e}")
 
+def process_tiles_with_fda(input_path, output_path, style_folder, num_folders, apply_probability=0.75):
+    """
+    Process .tif tiles from a specified number of folders (each containing 9 .tif tiles),
+    applying FDA with a specified probability using a randomly chosen style image from
+    a style folder. Tiles not processed with FDA are copied directly. Saves outputs with
+    the same names and subfolder structure as inputs.
+
+    Parameters:
+    - input_path: str, path to the folder containing subfolders with .tif tiles.
+    - output_path: str, path to the folder where output .tif tiles will be saved.
+    - style_folder: str, path to the folder containing style images for FDA.
+    - num_folders: int, number of subfolders (each containing 9 tiles) to process.
+    - apply_probability: float, probability (0-1) of applying FDA to each tile.
+
+    Returns:
+    - A tuple (fda_count, no_fda_count) indicating the number of tiles processed with and without FDA.
+    """
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    # Get a list of all subfolders in the input_path
+    subfolders = sorted([f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))])
+    if not subfolders:
+        raise ValueError("No subfolders found in the specified input folder.")
+
+    # Limit to the specified number of subfolders
+    subfolders = subfolders[:num_folders]
+
+    # Get a list of style images from the style folder
+    style_images = [os.path.join(style_folder, f) for f in os.listdir(style_folder) if f.endswith((".png", ".jpg"))]
+    if not style_images:
+        raise ValueError("No style images found in the specified style folder.")
+
+    fda_count = 0
+    no_fda_count = 0
+
+    for subfolder in subfolders:
+        subfolder_path = os.path.join(input_path, subfolder)
+        output_tile_subfolder = os.path.join(output_path, subfolder)
+
+        # Ensure the output subfolder exists
+        if not os.path.exists(output_tile_subfolder):
+            os.makedirs(output_tile_subfolder)
+
+        for filename in os.listdir(subfolder_path):
+            if filename.endswith(".tif"):
+                source_tile_path = os.path.join(subfolder_path, filename)
+                output_tile_path = os.path.join(output_tile_subfolder, filename)
+
+                if random.random() < apply_probability:  # Apply FDA with the given probability
+                    # Randomly select a style image
+                    random_style_image = random.choice(style_images)
+                    apply_fda_and_save(source_tile_path, random_style_image, output_tile_path)
+                    fda_count += 1
+                else:  # Directly copy the file
+                    shutil.copy(source_tile_path, output_tile_path)
+                    no_fda_count += 1
+
+    return fda_count, no_fda_count
+
+
 '''
 ----------------
 Helper Functions
@@ -508,6 +570,7 @@ def random_samples_from_tile(tile_path, output_dir, points, subimage_width, subi
         subimage_width (int): Width of the sub-images.
         subimage_height (int): Height of the sub-images.
     """
+    print("Applying FDA...")
     with rasterio.open(tile_path) as dataset:
         a = basename(output_dir)
         os.makedirs(output_dir, exist_ok=True)
@@ -549,6 +612,7 @@ def random_samples_from_tile(tile_path, output_dir, points, subimage_width, subi
                 nodata=nodata_value,  # Preserve NoData value
             ) as out_dataset:
                 out_dataset.write(subimage)
+    print("FDA Done.")
             
 def random_samples_from_tiles(feature_dir, label_dir, output_base_dir, subimage_size, num_samples=9):
     """
@@ -688,3 +752,18 @@ random_samples_from_tile(tile_path1, output_dir1, points_test, subimage_size, su
 
 # random sampling from all tiles
 #random_samples_from_tiles(feature_tiles_train, label_tiles_train,"../data/CN/random_samples", 256, num_samples=9)
+
+# Test fda
+'''
+source = "../data/CN/tiles/features/tile_0000.tif"
+target = "../data/Style/000012.png"
+output = "../data/CN/processed/result.tif"
+
+apply_fda_and_save(source, target, output)
+'''
+source = "../data/CN/random_samples/features"
+target = "../data/Style"
+output = "../data/CN/processed"
+fda, no_fda = process_tiles_with_fda(source, output, target, 10, apply_probability=0.75)
+print(f"Tiles with FDA applied: {fda}")
+print(f"Tiles without FDA applied: {no_fda}")
