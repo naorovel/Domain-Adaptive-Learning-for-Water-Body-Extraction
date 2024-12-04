@@ -11,6 +11,9 @@ If running the repository in VSCode, install the following extension pack:
 To build and run the Docker container: 
 - `cmd + shift + P` `"Build and Run Container"`
 
+Alternatively, you can run in the same diretory as the Dockerfile: 
+`docker build --tag 'dalwbe' .`
+
 If VSCode asks for config file options, use the default settings. 
 
 In the terminal of the container, activate the conda environment.  

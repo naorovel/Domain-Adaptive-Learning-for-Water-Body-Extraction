@@ -682,80 +682,88 @@ label_tiles_mergeback_test = "../data/BZ/tiles/merge/merged_label.tif"
 
 
 
-# splite and merge back -- training 
-#read_and_split_tif(label_dir_train, label_tiles_train, 512)
-'''
-read_and_split_tif(feature_dir_train, feature_tiles_train, 512)
-read_and_split_tif(label_dir_train, label_tiles_train, 512)
+# SPLICE AND MERGE BACK TIF - TRAINING
+#############################################################################
+# read_and_split_tif(feature_dir_train, feature_tiles_train, 512)
+# read_and_split_tif(label_dir_train, label_tiles_train, 512)
+# merge_tiles_to_tif(feature_tiles_train, feature_tiles_mergeback_train, 20480, 20480, 512)
+# merge_tiles_to_tif(label_tiles_train, label_tiles_mergeback_train, 20480, 20480, 512)
+#############################################################################
 
-merge_tiles_to_tif(feature_tiles_train, feature_tiles_mergeback_train, 20480, 20480, 512)
-merge_tiles_to_tif(label_tiles_train, label_tiles_mergeback_train, 20480, 20480, 512)
-'''
-# splite and merge back -- test
-'''
-read_and_split_tif(feature_dir_test, feature_tiles_test, 512)
-read_and_split_tif(label_dir_test, label_tiles_test, 512)
+# SPLICE AND MERGE BACK TIF - TEST
+#############################################################################
+# read_and_split_tif(feature_dir_test, feature_tiles_test, 512)
+# read_and_split_tif(label_dir_test, label_tiles_test, 512)
+# merge_tiles_to_tif(feature_tiles_test, feature_tiles_mergeback_test, 5120, 5120, 512)
+# merge_tiles_to_tif(label_tiles_test, label_tiles_mergeback_test, 5120, 5120, 512)
+#############################################################################
 
-merge_tiles_to_tif(feature_tiles_test, feature_tiles_mergeback_test, 5120, 5120, 512)
-merge_tiles_to_tif(label_tiles_test, label_tiles_mergeback_test, 5120, 5120, 512)
-'''
+# COMPARE IF TWO MERGED ITEMS ARE THE SAME
+#############################################################################
+# file1 = "../data/CN/feature.tif"
+# file2 = "../data/CN/corrected_geotransform.tif"
+# are_same, message = compare_tif_images(feature_dir_train, feature_tiles_mergeback_train)
+# print(message)
+#############################################################################
 
-# compare if 2 images are the same
-'''
-file1 = "../data/CN/feature.tif"
-file2 = "../data/CN/corrected_geotransform.tif"
-are_same, message = compare_tif_images(feature_dir_train, feature_tiles_mergeback_train)
-print(message)
 
-'''
+# CREATE DATABASE
+#############################################################################
 
-# create database
-'''
-dataset = SatelliteDataset(
-    feature_dir=feature_tiles_test,
-    label_dir=label_tiles_test,
-    weight_dir=None,
-    tiles=range(0, 100),
-    mu=None,
-    sigma=None,
-    sample=None
-)
+# dataset = SatelliteDataset(
+#     feature_dir=feature_tiles_test,
+#     label_dir=label_tiles_test,
+#     weight_dir=None,
+#     tiles=range(0, 100),
+#     mu=None,
+#     sigma=None,
+#     sample=None
+# )
 
-print("Number of tiles:", len(dataset))
-print("Feature tiles shape:", dataset.features.shape)
-print("Mask tiles shape:", dataset.masks.shape)
+# print("Number of tiles:", len(dataset))
+# print("Feature tiles shape:", dataset.features.shape)
+# print("Mask tiles shape:", dataset.masks.shape)
 
-features, masks, _ = dataset[0]
-print("Features at index 0:", features)
-print("Masks at index 0:", masks)
-'''
+# features, masks = dataset[0]
+# print("Features at index 0:", features)
+# print("Masks at index 0:", masks)
 
-# random sampling from a sigle tile (test purpose)
-'''
-random_sample_generator = random.Random(42)
-points_test = sample_random_points(512, 512, 256, 256, num_samples=9, rng=random_sample_generator)
+#############################################################################
 
-#print("Points from first call:", points_test)
-tile_path1 = "../data/CN/tiles/features/tile_0020.tif"
-output_dir1 = "../data/CN/random_samples/0020"
-subimage_size=256
-random_samples_from_tile(tile_path1, output_dir1, points_test, subimage_size, subimage_size)
-'''
+# RANDOM SAMPLING FROM A SINGLE TILE (FOR TESTING)
+#############################################################################
 
-# random sampling from all tiles
-#random_samples_from_tiles(feature_tiles_train, label_tiles_train,"../data/CN/random_samples", 256, num_samples=9)
+# random_sample_generator = random.Random(42)
+# points_test = sample_random_points(512, 512, 256, 256, num_samples=9, rng=random_sample_generator)
 
-# Test fda
-'''
+# #print("Points from first call:", points_test)
+# tile_path1 = "../data/CN/tiles/features/tile_0020.tif"
+# output_dir1 = "../data/CN/random_samples/0020"
+# subimage_size=256
+# random_samples_from_tile(tile_path1, output_dir1, points_test, subimage_size, subimage_size)
+
+#############################################################################
+
+# RANDOM SAMPLING FROM ALL TILES
+#############################################################################
+# random_samples_from_tiles(feature_tiles_train, label_tiles_train,"../data/CN/random_samples", 256, num_samples=9)
+#############################################################################
+
+
+# TEST FDA
+#############################################################################
+
 source = "../data/CN/tiles/features/tile_0000.tif"
 target = "../data/Style/000012.png"
 output = "../data/CN/processed/result.tif"
 
 apply_fda_and_save(source, target, output)
-'''
+
 source = "../data/CN/random_samples/features"
 target = "../data/Style"
 output = "../data/CN/processed"
 fda, no_fda = process_tiles_with_fda(source, output, target, 10, apply_probability=0.75)
 print(f"Tiles with FDA applied: {fda}")
 print(f"Tiles without FDA applied: {no_fda}")
+#############################################################################
+
