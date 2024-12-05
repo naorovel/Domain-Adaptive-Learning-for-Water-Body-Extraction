@@ -659,6 +659,104 @@ def random_samples_from_tiles(feature_dir, label_dir, output_base_dir, subimage_
             random_samples_from_tile(label_tile_path, output_label_dir, random_points, subimage_size, subimage_size)
     print("Random sampling Done.")
 
+def linear_stretch(image, A, B, a=0, b=1):
+    """
+    Perform linear stretching of an image from range [A, B] to [a, b].
+
+    Parameters:
+        image (numpy.ndarray): Input image array.
+        A (float): Minimum pixel value of the input range.
+        B (float): Maximum pixel value of the input range.
+        a (float): Minimum value of the output range (default is 0).
+        b (float): Maximum value of the output range (default is 1).
+
+    Returns:
+        numpy.ndarray: Image array normalized to range [a, b].
+    """
+    # Apply the linear stretching formula
+    stretched = (image - A) * ((b - a) / (B - A)) + a
+    #stretched = np.clip(stretched, a, b)
+    return stretched
+
+def normalize_tif(input_path, output_path, a=0, b=1):
+    """
+    Normalize a .tif image file using Linear Stretching for each band independently and save the output.
+
+    Parameters:
+        input_path (str): Path to the input .tif file.
+        output_path (str): Path to save the normalized .tif file.
+        a (float): Minimum value of the output range (default is 0).
+        b (float): Maximum value of the output range (default is 1).
+    """
+    with rasterio.open(input_path) as src:
+        # Read the image data as a numpy array
+        image = src.read()
+        
+        # Reshape the data for easier manipulation (if multi-band)
+        reshaped_image = reshape_as_image(image)
+        
+        # Apply linear stretching to each band independently
+        normalized = np.zeros_like(reshaped_image, dtype=np.float32)
+        for band in range(reshaped_image.shape[-1]):
+            # Compute min (A) and max (B) for the current band
+            A = reshaped_image[:, :, band].min()
+            B = reshaped_image[:, :, band].max()
+            
+            # Apply linear stretching for the current band
+            normalized[:, :, band] = linear_stretch(reshaped_image[:, :, band], A, B, a, b)
+        
+        # Reshape back to raster format
+        normalized_raster = reshape_as_raster(normalized)
+        
+        # Save the normalized image
+        profile = src.profile
+        profile.update(dtype=rasterio.float32)  # Update dtype to float32
+        with rasterio.open(output_path, 'w', **profile) as dst:
+            dst.write(normalized_raster)
+
+def normalize_tif_percentiles(input_path, output_path, a=0, b=1):
+    """
+    Normalize a .tif image file using Linear Stretching with clipping 
+    between the 2nd and 97th percentiles for each band independently 
+    and save the output.
+
+    Parameters:
+        input_path (str): Path to the input .tif file.
+        output_path (str): Path to save the normalized .tif file.
+        a (float): Minimum value of the output range (default is 0).
+        b (float): Maximum value of the output range (default is 1).
+    """
+    with rasterio.open(input_path) as src:
+        # Read the image data as a numpy array
+        image = src.read()
+        
+        # Reshape the data for easier manipulation (if multi-band)
+        reshaped_image = reshape_as_image(image)
+        
+        # Apply linear stretching with clipping to each band independently
+        normalized = np.zeros_like(reshaped_image, dtype=np.float32)
+        for band in range(reshaped_image.shape[-1]):
+            band_data = reshaped_image[:, :, band]
+            
+            # Compute 2nd (A) and 97th (B) percentiles for the current band
+            A = np.percentile(band_data, 2)
+            B = np.percentile(band_data, 97)
+            
+            # Clip the data to the [2nd, 97th] percentile range
+            band_data_clipped = np.clip(band_data, A, B)
+            
+            # Apply linear stretching for the current band
+            normalized[:, :, band] = linear_stretch(band_data_clipped, A, B, a, b)
+        
+        # Reshape back to raster format
+        normalized_raster = reshape_as_raster(normalized)
+        
+        # Save the normalized image
+        profile = src.profile
+        profile.update(dtype=rasterio.float32)  # Update dtype to float32
+        with rasterio.open(output_path, 'w', **profile) as dst:
+            dst.write(normalized_raster)
+
 '''
 -------------
 Testing Field
