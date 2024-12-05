@@ -48,7 +48,7 @@ def get_train_data():
                               )
 
     validation_data = train_data.validation_dataset 
-    print(validation_data)
+    print(len(os.listdir(validation_data.feature_tile_dir)))
 
 def get_test_data(): 
     print("Generating test data...")

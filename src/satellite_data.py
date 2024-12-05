@@ -59,9 +59,9 @@ class SatelliteData(Dataset):
             self.create_validation_set(validation_split)
 
 
-        # if random_sample: 
-        #     self.generate_patches()
-        #     self.transform_patches()            
+        if random_sample: 
+            self.generate_patches()
+            self.transform_patches()            
 
 
     def generate_split_tiles(self):
@@ -142,7 +142,7 @@ class SatelliteData(Dataset):
         # TODO: Implementation
 
     def transform_patches(self): 
-        self.apply_fda()
+        self.apply_fda(water=False)
         self.apply_flip(horizontal=True)
         self.apply_flip(horizontal=False)
         self.apply_rotation(90)
@@ -161,12 +161,12 @@ class SatelliteData(Dataset):
         print("Generating patches...")
         clear_dir(self.random_sample_dir)
         self.patches = random_samples_from_tiles(
-            self.feature_tiles, self.label_tiles, 
+            self.feature_tile_dir, self.label_tile_dir, 
             self.random_sample_dir, self.patch_size, 
             self.num_samples)
         print(f"Generated {len(os.listdir(self.random_sample_dir))} patches.")
 
-    def apply_fda(self): 
+    def apply_fda(self, water): 
         """
         Assume that output directory has been cleaned/is empty (except for .gitkeep). 
         """
@@ -194,10 +194,10 @@ class SatelliteData(Dataset):
         val_feature_tiles = os.listdir(self.feature_tile_dir)[-num_tiles:]
         val_label_tiles = os.listdir(self.label_tile_dir)[-num_tiles:]
 
+        clear_dir(self.validation_dataset_dir+"/features")
         move_dirs(val_feature_tiles, self.feature_tile_dir, self.validation_dataset_dir+"/features")
+        clear_dir(self.validation_dataset_dir+"/labels")
         move_dirs(val_label_tiles, self.label_tile_dir, self.validation_dataset_dir+"/labels")
-                
-
 
         self.validation_dataset = SatelliteData(
             self.feature_dir, 
@@ -205,7 +205,8 @@ class SatelliteData(Dataset):
             self.validation_dataset_dir+"/features",
             self.validation_dataset_dir+"/labels",
             validation_dataset=True,
-            random_sample=False
+            random_sample=False,
+            validation_split=0
             )
         
 
