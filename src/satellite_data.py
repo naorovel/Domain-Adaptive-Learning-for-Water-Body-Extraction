@@ -41,6 +41,8 @@ class SatelliteData(Dataset):
         if not self.empty_dir(self.feature_tile_dir) or not self.empty_dir(self.label_tile_dir):
             if "Y".lower() == input("Tiles in this directory already exist. Would you like to split the input TIF again? [Y/n] ").lower():
                 print("Existing tiles will be overwritten.")
+                clear_dir(self.feature_tile_dir)
+                clear_dir(self.label_tile_dir)
                 read_and_split_tif(self.feature_dir, self.feature_tile_dir, self.split_size)
                 read_and_split_tif(self.label_dir, self.label_tile_dir, self.split_size)
                 print(f"New tiles of size {self.split_size} were created.")

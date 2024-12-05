@@ -1,4 +1,4 @@
-import os  # If directory manipulation is involved (e.g., path joining, existence checks)
+import os, shutil  # If directory manipulation is involved (e.g., path joining, existence checks)
 import torch  # For tensor operations
 import numpy as np  # For numerical operations like stacking arrays
 import rasterio  # For reading .tif files
@@ -426,3 +426,14 @@ def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height
         dst.write(merged_array)
 
     # print(f"Merged raster saved to {output_file}")
+
+def clear_dir(dir): 
+    for filename in os.listdir(dir): 
+        file_path = os.path.join(dir, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
