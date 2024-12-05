@@ -8,6 +8,8 @@ from rasterio.transform import Affine
 import random
 from os.path import basename
 import glob
+from FDA.FDA import apply_fda_and_save
+
 
 ########################################################################
 # A collection of functions to process TIF files.
@@ -428,6 +430,7 @@ def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height
     # print(f"Merged raster saved to {output_file}")
 
 def clear_dir(dir): 
+    # TODO: Fix bug - currently deletes all files including gitkeep. Should not delete .gitkeep
     for filename in os.listdir(dir): 
         file_path = os.path.join(dir, filename)
         try:
@@ -437,3 +440,196 @@ def clear_dir(dir):
                 shutil.rmtree(file_path)
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+
+def random_samples_from_tiles(feature_dir, label_dir, output_base_dir, subimage_size, num_samples=9):
+    """
+    Processes corresponding feature and label tiles, generates random samples for each,
+    and saves them in separate output directories.
+
+    Args:
+        feature_dir (str): Path to the folder containing feature tile TIFF files.
+        label_dir (str): Path to the folder containing label tile TIFF files.
+        output_base_dir (str): Base directory to save the sub-image samples.
+        subimage_size (int): Size (width and height) of the sub-images.
+        num_samples (int): Number of random samples to generate per tile.
+    """
+    print("Random sampling from both feature and label tiles...")
+    # Initialize random sample generator
+    random_sample_generator = random.Random(42)
+
+    # Ensure output directories exist
+    output_features_dir = os.path.join(output_base_dir, "features")
+    output_labels_dir = os.path.join(output_base_dir, "labels")
+    os.makedirs(output_features_dir, exist_ok=True)
+    os.makedirs(output_labels_dir, exist_ok=True)
+
+    # Process each feature tile
+    for tile_name in os.listdir(feature_dir):
+        if tile_name.endswith(".tif"):  # Ensure it's a TIFF file
+            feature_tile_path = os.path.join(feature_dir, tile_name)
+            label_tile_path = os.path.join(label_dir, tile_name)
+
+            # Check if corresponding label tile exists
+            if not os.path.exists(label_tile_path):
+                print(f"Skipping {tile_name} - corresponding label tile not found.")
+                continue
+
+            # Extract tile ID from the file name
+            tile_id = os.path.splitext(tile_name)[0].split('_')[-1]
+
+            # Define output directories for this tile
+            output_feature_dir = os.path.join(output_features_dir, tile_id)
+            output_label_dir = os.path.join(output_labels_dir, tile_id)
+            os.makedirs(output_feature_dir, exist_ok=True)
+            os.makedirs(output_label_dir, exist_ok=True)
+
+            # Assuming tiles are 512x512
+            random_points = sample_random_points(512, 512, subimage_size, subimage_size,
+                                                 num_samples=num_samples, rng=random_sample_generator)
+
+            # Generate random samples for the feature tile
+            random_samples_from_tile(feature_tile_path, output_feature_dir, random_points, subimage_size, subimage_size)
+
+            # Generate random samples for the label tile
+            random_samples_from_tile(label_tile_path, output_label_dir, random_points, subimage_size, subimage_size)
+    print("Random sampling Done.")
+
+def random_sample_from_tile(tile_path, output_dir, point, subimage_width, subimage_height):
+    """
+    Cuts a sub-image from a given point and saves it to the output directory.
+    
+    Args:
+        tile_path (str): Path to the input TIFF image.
+        output_dir (str): Directory to save the sub-images.
+        point (tuple): (x, y) coordinates of the top-left corner of the sub-image.
+        subimage_width (int): Width of the sub-image.
+        subimage_height (int): Height of the sub-image.
+    """
+    # Open the TIFF image
+    dataset = gdal.Open(tile_path)
+    if dataset is None:
+        raise FileNotFoundError(f"Could not open file: {tile_path}")
+    
+    x, y = point
+    band = dataset.GetRasterBand(1)  # Assume the first band is used
+    subimage = band.ReadAsArray(x, y, subimage_width, subimage_height)
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Save sub-image to a new TIFF file
+    output_path = os.path.join(output_dir, f"subimage_{x}_{y}.tif")
+    driver = gdal.GetDriverByName("GTiff")
+    out_dataset = driver.Create(output_path, subimage_width, subimage_height, 1, band.DataType)
+    out_dataset.GetRasterBand(1).WriteArray(subimage)
+    out_dataset.FlushCache()
+    out_dataset = None  # Close the file
+    dataset = None  # Close the input file
+
+
+def process_all_tiles(folder_path, output_base_dir, point, subimage_width, subimage_height):
+    """
+    Processes all TIFF tiles in a folder, calling random_sample_from_tile on each,
+    and saves the outputs to directories named after the tile IDs.
+    
+    Args:
+        folder_path (str): Path to the folder containing TIFF tiles.
+        output_base_dir (str): Base directory for saving outputs.
+        point (tuple): (x, y) coordinates of the top-left corner of the sub-image.
+        subimage_width (int): Width of the sub-image.
+        subimage_height (int): Height of the sub-image.
+    """
+    # Regex pattern to extract tile ID from filenames like tile_0000.tif
+    tile_pattern = re.compile(r"tile_(\d+)\.tif")
+    
+    # Iterate over all files in the folder
+    for tile_filename in os.listdir(folder_path):
+        # Match files with the tile pattern
+        match = tile_pattern.match(tile_filename)
+        if not match:
+            continue
+        
+        # Extract tile ID
+        tile_id = match.group(1)
+        
+        # Full path to the current tile
+        tile_path = os.path.join(folder_path, tile_filename)
+        
+        # Output directory for the current tile
+        output_dir = os.path.join(output_base_dir, tile_id)
+        
+        # Call random_sample_from_tile for the current tile
+        try:
+            random_sample_from_tile(tile_path, output_dir, point, subimage_width, subimage_height)
+            print(f"Processed tile {tile_filename} and saved to {output_dir}")
+        except RasterioIOError as e:
+            print(f"Error reading tile {tile_filename}: {e}")
+        except Exception as e:
+            print(f"Error processing tile {tile_filename}: {e}")
+
+
+def process_tiles_with_fda(input_path, output_path, style_folder, num_folders, apply_probability=0.75):
+    """
+    Process .tif tiles from a specified number of folders (each containing 9 .tif tiles),
+    applying FDA with a specified probability using a randomly chosen style image from
+    a style folder. Tiles not processed with FDA are copied directly. Saves outputs with
+    the same names and subfolder structure as inputs.
+
+    Parameters:
+    - input_path: str, path to the folder containing subfolders with .tif tiles.
+    - output_path: str, path to the folder where output .tif tiles will be saved.
+    - style_folder: str, path to the folder containing style images for FDA.
+    - num_folders: int, number of subfolders (each containing 9 tiles) to process.
+    - apply_probability: float, probability (0-1) of applying FDA to each tile.
+
+    Returns:
+    - A tuple (fda_count, no_fda_count) indicating the number of tiles processed with and without FDA.
+    """
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    # Get a list of all subfolders in the input_path
+    subfolders = sorted([f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))])
+    if not subfolders:
+        raise ValueError("No subfolders found in the specified input folder.")
+
+    # Limit to the specified number of subfolders
+    subfolders = subfolders[:num_folders]
+
+    # Get a list of style images from the style folder
+    style_images = [os.path.join(style_folder, f) for f in os.listdir(style_folder) if f.endswith((".png", ".jpg"))]
+    if not style_images:
+        raise ValueError("No style images found in the specified style folder.")
+
+    fda_count = 0
+    no_fda_count = 0
+
+    for subfolder in subfolders:
+        subfolder_path = os.path.join(input_path, subfolder)
+        output_tile_subfolder = os.path.join(output_path, subfolder)
+
+        # Ensure the output subfolder exists
+        if not os.path.exists(output_tile_subfolder):
+            os.makedirs(output_tile_subfolder)
+
+        for filename in os.listdir(subfolder_path):
+            if filename.endswith(".tif"):
+                source_tile_path = os.path.join(subfolder_path, filename)
+                output_tile_path = os.path.join(output_tile_subfolder, filename)
+
+                if random.random() < apply_probability:  # Apply FDA with the given probability
+                    # Randomly select a style image
+                    random_style_image = random.choice(style_images)
+                    apply_fda_and_save(source_tile_path, random_style_image, output_tile_path)
+                    fda_count += 1
+                else:  # Directly copy the file
+                    shutil.copy(source_tile_path, output_tile_path)
+                    no_fda_count += 1
+
+    return fda_count, no_fda_count
+
+def move_dirs(source_dir_list, source_dir, dest):
+    for sub_dir in source_dir_list:
+        dir_to_move = os.path.join(source_dir, sub_dir)
+        shutil.move(dir_to_move, dest)     

@@ -850,7 +850,6 @@ label_tiles_mergeback_test = "../data/BZ/tiles/merge/merged_label.tif"
 
 # TEST FDA
 #############################################################################
-
 source = "../data/CN/tiles/features/tile_0000.tif"
 target = "../data/Style/000012.png"
 output = "../data/CN/processed/result.tif"

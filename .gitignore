@@ -13,3 +13,6 @@ data/CN/tiles/labels/*
 data/CN/tiles/merge/*
 data/CN/feature_trimmed.tif
 data/CN/label_trimmed.tif
+
+data/CN/tiles/validation/features/*
+data/CN/tiles/validation/labels/*

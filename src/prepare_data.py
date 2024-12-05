@@ -21,6 +21,7 @@ feature_tiles_train = "../data/CN/tiles/features/"
 label_tiles_train = "../data/CN/tiles/labels/"
 feature_tiles_mergeback_train = "../data/CN/tiles/merge/merged_feature.tif"
 label_tiles_mergeback_train = "../data/CN/tiles/merge/merged_label.tif"
+random_sample_train_dir = "../data/CN/random_samples"
 
 # Test dataset
 feature_dir_test = "../data/BZ/feature.tif"
@@ -41,10 +42,13 @@ def get_train_data():
                               feature_tiles_train,
                               label_tiles_train,
                               feature_tiles_mergeback_dir=feature_tiles_mergeback_train,
-                              label_tiles_mergeback_dir=label_tiles_mergeback_train
+                              label_tiles_mergeback_dir=label_tiles_mergeback_train,
+                              random_sample_dir=random_sample_train_dir,
+                              random_sample=True
                               )
-    
 
+    validation_data = train_data.validation_dataset 
+    print(validation_data)
 
 def get_test_data(): 
     print("Generating test data...")
@@ -54,13 +58,14 @@ def get_test_data():
                               feature_tiles_test,
                               label_tiles_test,
                               feature_tiles_mergeback_dir=feature_tiles_mergeback_test,
-                              label_tiles_mergeback_dir=label_tiles_mergeback_test
+                              label_tiles_mergeback_dir=label_tiles_mergeback_test,
+                              random_sample = False,
                               ) 
 
 
 def main(): 
     get_train_data()
-    get_test_data()
+    # get_test_data()
 
 if __name__ == "__main__": 
     main()
