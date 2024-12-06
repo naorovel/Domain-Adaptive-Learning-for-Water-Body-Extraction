@@ -76,7 +76,8 @@ def get_test_data():
 
 def main(): 
     get_train_data()
-    # get_test_data()
+    get_validation_data()
+    #get_test_data()
 
 if __name__ == "__main__": 
     main()
