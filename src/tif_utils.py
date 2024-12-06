@@ -451,7 +451,6 @@ def transform_patch(random_sample_dir, patch_dir, prob):
     return f_data, l_data
 
 def transform_tif(feature_dir, mask_dir, prob, fda=True): 
-    print("Transforming TIF...")
     f_data, f_transform, f_crs = read_tif_file(feature_dir)
     l_data, l_transform, l_crs = read_tif_file(mask_dir)
     data = [f_data, l_data]

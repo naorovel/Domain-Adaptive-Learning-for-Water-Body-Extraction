@@ -84,6 +84,7 @@ class SatelliteData(Dataset):
         curr_batch = self.batches.pop()
         processed_batch = []
         for patch in curr_batch: 
+            print(f"Transforming TIF of {patch}...")
             processed_batch.append(transform_patch(self.random_sample_dir, patch, self.prob))
         return processed_batch
 
