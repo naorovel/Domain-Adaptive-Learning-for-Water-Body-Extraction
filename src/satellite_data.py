@@ -2,6 +2,7 @@ import math
 import torch  # For tensor operations
 from torch.utils.data import Dataset  # Base class for custom PyTorch datasets
 from tif_utils import *
+import random
 
 class SatelliteData(Dataset):
     """
@@ -10,12 +11,13 @@ class SatelliteData(Dataset):
     
     mu: torch.float16
     sigma: torch.float16
-    feature_tiles: torch.tensor = []
-    label_tiles:torch.tensor = []
-    patches: torch.tensor = []
+    feature_tiles = []
+    label_tiles = []
+    patches = []
     target_dir = "../data/Style"
     validation_dataset: any = None
     validation_dataset_dir = ""
+    batches = []
 
     def __init__(self, feature_dir, label_dir,
                  feature_tile_dir, label_tile_dir,
@@ -27,13 +29,12 @@ class SatelliteData(Dataset):
                  split_size = 512,
                  patch_size = 256, 
                  num_samples=9,
-                 validation_split=0.1,
                  prob = {
                  'p_FDA': 0.75,
                  'p_hflip': 0.5,
                  'p_vflip': 0.5,
                  'p_90rot': 0.25,
-                 'p_180rot': 0.25},
+                 'p_270rot': 0.25},
                  validation_dataset = False):
         self.feature_dir = feature_dir
         self.label_dir = label_dir
@@ -54,15 +55,37 @@ class SatelliteData(Dataset):
                 self.generate_split_tiles()
                 self.read_split_tiles()
                 self.feature_tiles = self.normalize_tiles(self.feature_tiles)
-             
-        if validation_split != 0:
-            self.create_validation_set(validation_split)
+        
+            if random_sample:
+                self.generate_patches()
+            else: 
+                print("Generated patches already...")
 
+    def get_patch_dirs(self): 
+        patch_dirs = []
+        for root, dirs, files in os.walk(self.random_sample_dir + "/features"):
+            for name in files: 
+                dirname = root.split(os.path.sep)[-1]
+                patch_dirs.append(os.path.sep + dirname + os.sep + name)
 
-        if random_sample: 
-            self.generate_patches()
-            self.transform_patches()            
+        return patch_dirs
 
+    def get_batches(self, batch_size):
+        print(f"Creating batches of size {batch_size}...")
+        # Returns batches of tiles as filenames to use for epochs
+        patch_list = self.get_patch_dirs()
+        num_batches = math.ceil(len(patch_list)/batch_size)
+        batch_list = np.array_split(patch_list, num_batches) 
+        self.batches = batch_list
+        return batch_list  
+    
+    def get_next_batch(self):
+        print(f"Getting next batch...")
+        curr_batch = self.batches.pop()
+        processed_batch = []
+        for patch in curr_batch: 
+            processed_batch.append(transform_patch(self.random_sample_dir, patch, self.prob))
+        return processed_batch
 
     def generate_split_tiles(self):
         if not self.empty_dir(self.feature_tile_dir) or not self.empty_dir(self.label_tile_dir):
@@ -132,39 +155,15 @@ class SatelliteData(Dataset):
     def empty_dir(self, dir): 
         return len(os.listdir(dir)) == 0
 
-    def random_subset(self, prob): 
-        """
-        Generates a random subset of tiles names given a probability of selection.
-        prob: float16 in (0, 1). 
-
-        Returns: A set of tile names selected with probability "prob".
-        """
-        # TODO: Implementation
-
-    def transform_patches(self): 
-        self.apply_fda(water=False)
-        self.apply_flip(horizontal=True)
-        self.apply_flip(horizontal=False)
-        self.apply_rotation(90)
-        self.apply_rotation(270)
-
-    def apply_transform(self, transform, prob):
-        """
-        Applies the function 'transform' (tile -> tile) on each tile generated
-        in a random subset with probability 'prob'. 
-
-        Returns: A set of transformed TIFs. 
-        """
-        # TODO: Implementation
-
     def generate_patches(self):
         print("Generating patches...")
         clear_dir(self.random_sample_dir)
-        self.patches = random_samples_from_tiles(
+        random_samples_from_tiles(
             self.feature_tile_dir, self.label_tile_dir, 
             self.random_sample_dir, self.patch_size, 
             self.num_samples)
-        print(f"Generated {len(os.listdir(self.random_sample_dir))} patches.")
+        num_patches = sum([len(files) for r, d, files in os.walk(self.random_sample_dir+"/features")])
+        print(f"Generated {num_patches} patches.")
 
     def apply_fda(self, water): 
         """
@@ -175,24 +174,18 @@ class SatelliteData(Dataset):
 
         print(f"Tiles with FDA applied: {fda}")
         print(f"Tiles without FDA applied: {no_fda}")
-
-
-    def apply_flip(self, horizontal=True):
-        print("Flipping")
-
-
-    def apply_rotation(self, deg):
-        print("Rotating")
-
  
     def create_validation_set(self, split):
-        print("Creating validation set:")
+        print("Creating validation set...")
         self.validation_dataset_dir = self.feature_tile_dir[0:-10]
         self.validation_dataset_dir = self.validation_dataset_dir + "/validation"
 
         num_tiles = round(split * len(os.listdir(self.feature_tile_dir)))
         val_feature_tiles = os.listdir(self.feature_tile_dir)[-num_tiles:]
         val_label_tiles = os.listdir(self.label_tile_dir)[-num_tiles:]
+
+        val_feature_tile_root = self.validation_dataset_dir + "/features/"
+        val_label_tile_root = self.validation_dataset_dir + "/labels/"
 
         clear_dir(self.validation_dataset_dir+"/features")
         move_dirs(val_feature_tiles, self.feature_tile_dir, self.validation_dataset_dir+"/features")
@@ -205,9 +198,17 @@ class SatelliteData(Dataset):
             self.validation_dataset_dir+"/features",
             self.validation_dataset_dir+"/labels",
             validation_dataset=True,
-            random_sample=False,
-            validation_split=0
+            random_sample=False            
             )
+        
+        for i in range(num_tiles): 
+            self.validation_dataset.feature_tiles, self.validation_dataset.label_tiles = transform_tif(
+                val_feature_tile_root + val_feature_tiles[i], 
+                val_label_tile_root + val_label_tiles[i], 
+                self.prob, 
+                fda=False)
+        
+        return self.validation_dataset
         
 
    

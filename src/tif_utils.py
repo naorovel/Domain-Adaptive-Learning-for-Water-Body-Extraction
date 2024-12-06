@@ -441,6 +441,65 @@ def clear_dir(dir):
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
+def transform_patch(random_sample_dir, patch_dir, prob): 
+    # Gets a path to a patch
+    feature_dir = random_sample_dir + os.sep + "features" + os.sep + patch_dir
+    mask_dir = random_sample_dir + os.sep + "labels" + os.sep + patch_dir
+
+    f_data, l_data = transform_tif(feature_dir, mask_dir, prob)
+
+    return f_data, l_data
+
+def transform_tif(feature_dir, mask_dir, prob, fda=True): 
+    print("Transforming TIF...")
+    f_data, f_transform, f_crs = read_tif_file(feature_dir)
+    l_data, l_transform, l_crs = read_tif_file(mask_dir)
+    data = [f_data, l_data]
+
+    #f_data = self.apply_fda(water=False) # Do not conduct FDA on mask
+    data = apply_flip([f_data, l_data], True, prob["p_hflip"])
+    data = apply_flip([f_data, l_data], False, prob["p_vflip"])
+    data = apply_rotation([f_data, l_data], 90, prob["p_90rot"])
+    #data = apply_rotation([f_data, l_data], 270, prob["p_270rot"])
+    f_data = torch.from_numpy(data[0].copy())
+    l_data = torch.from_numpy(data[1].copy())
+    
+    return f_data, l_data
+
+def apply_flip(data, horizontal, prob):
+    res = []
+    if horizontal: 
+        for i in range(len(data)): 
+            if prob_succeed(prob): 
+                res.append(np.fliplr(data[i]))
+            else: 
+                res.append(data[i])
+    else: 
+        for i in range(len(data)): 
+            if prob_succeed(prob): 
+                res.append(np.flipud(data[i]))
+            else: 
+                res.append(data[i])
+    return res
+
+def apply_rotation(data, deg, prob):
+    res = []
+    if deg==90: 
+        for i in range(len(data)): 
+            if prob_succeed(prob): 
+                res.append(np.rot90(data[i], k=1, axes=(1,0)))
+            else: 
+                res.append(data[i])
+    elif deg==270: # assumed to be 270 degrees: 
+        for i in range(len(data)): 
+            if prob_succeed(prob): 
+                res.append(np.rot90(data[i], k=1, axes=(0,1)))
+            else: 
+                res.append(data[i])
+    return res
+
+def prob_succeed(p): 
+    return random.random() < p
 
 def random_samples_from_tiles(feature_dir, label_dir, output_base_dir, subimage_size, num_samples=9):
     """

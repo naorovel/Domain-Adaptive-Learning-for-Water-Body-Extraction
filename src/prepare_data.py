@@ -46,9 +46,11 @@ def get_train_data():
                               random_sample_dir=random_sample_train_dir,
                               random_sample=True
                               )
+    
+    validation_data = train_data.create_validation_set(0.1) 
 
-    validation_data = train_data.validation_dataset 
-    print(len(os.listdir(validation_data.feature_tile_dir)))
+    train_data.get_batches(16)
+    next_batch = train_data.get_next_batch()
 
 def get_test_data(): 
     print("Generating test data...")
