@@ -32,6 +32,7 @@ feature_tiles_mergeback_test = "../data/BZ/tiles/merge/merged_feature.tif"
 label_tiles_mergeback_test = "../data/BZ/tiles/merge/merged_label.tif"
 
 train_data: SatelliteData
+validation_data: SatelliteData
 test_data: SatelliteData
 
 def get_train_data(): 
@@ -47,10 +48,18 @@ def get_train_data():
                               random_sample=True
                               )
     
-    validation_data = train_data.create_validation_set(0.1) 
+    return train_data
 
-    train_data.get_batches(16)
-    next_batch = train_data.get_next_batch()
+def get_validation_data(val_ratio):
+    ## ASSUME THAT TRAINING DATA HAS ALREADY BEEN CREATED
+    print("Generating validation data...")
+    global validation_data
+    validation_data = train_data.create_validation_set(val_ratio) 
+
+    return validation_data
+
+    # train_data.get_batches(16)
+    # next_batch = train_data.get_next_batch()
 
 def get_test_data(): 
     print("Generating test data...")
