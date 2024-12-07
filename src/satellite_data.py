@@ -69,6 +69,12 @@ class SatelliteData(Dataset):
                 patch_dirs.append(os.path.sep + dirname + os.sep + name)
 
         return patch_dirs
+    
+    def save_train_baseline(self, dir): 
+        patch_list = self.get_patch_dirs()
+        for patch in patch_list:
+            filename = patch[5:]
+            transform_patch(self.random_sample_dir, patch, filename, self.prob, save_dir=dir)
 
     def get_batches(self, batch_size):
         print(f"Creating batches of size {batch_size}...")

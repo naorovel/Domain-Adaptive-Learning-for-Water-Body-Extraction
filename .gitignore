@@ -16,3 +16,8 @@ data/CN/label_trimmed.tif
 
 data/CN/tiles/validation/features/*
 data/CN/tiles/validation/labels/*
+
+data/CN/processed/train/features/*
+data/CN/processed/train/labels/*
+data/CN/processed/validation/features/*
+data/CN/processed/validation/labels/*

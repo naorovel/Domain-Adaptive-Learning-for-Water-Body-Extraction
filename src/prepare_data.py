@@ -22,6 +22,10 @@ label_tiles_train = "../data/CN/tiles/labels/"
 feature_tiles_mergeback_train = "../data/CN/tiles/merge/merged_feature.tif"
 label_tiles_mergeback_train = "../data/CN/tiles/merge/merged_label.tif"
 random_sample_train_dir = "../data/CN/random_samples"
+processed_train_dir = "../data/CN/processed/train"
+
+processed_val_dir = "../data/CN/processed/validation"
+processed_test_dir = "../data/BZ/processed/test"
 
 # Test dataset
 feature_dir_test = "../data/BZ/feature.tif"
@@ -48,6 +52,9 @@ def get_train_data():
                               random_sample=True
                               )
     
+    # train_data.save_train_baseline(processed_train_dir)
+    
+    print("Finished generating training data.")
     return train_data
 
 def get_validation_data(val_ratio):
@@ -76,7 +83,7 @@ def get_test_data():
 
 def main(): 
     get_train_data()
-    get_validation_data()
+    get_validation_data(0.1)
     #get_test_data()
 
 if __name__ == "__main__": 

@@ -10,6 +10,7 @@ from os.path import basename
 import glob
 from FDA.FDA import apply_fda_and_save
 
+random.seed(10)
 
 ########################################################################
 # A collection of functions to process TIF files.
@@ -40,8 +41,10 @@ def read_tif_file(file):
     with rasterio.open(file) as src:
         data = src.read()
         transform = src.transform
-        crs = src.crs
-    return data, transform, crs
+        crs = src.crs,
+        num_bands = src.count
+        dtype = src.dtypes[0]
+    return data, transform, crs, num_bands, dtype
 
 def compare_tif_images(tif1, tif2):
     """
@@ -441,19 +444,20 @@ def clear_dir(dir):
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-def transform_patch(random_sample_dir, patch_dir, prob): 
+def transform_patch(random_sample_dir, patch_dir, filename, prob, save_dir): 
     # Gets a path to a patch
     feature_dir = random_sample_dir + os.sep + "features" + os.sep + patch_dir
     mask_dir = random_sample_dir + os.sep + "labels" + os.sep + patch_dir
 
-    f_data, l_data = transform_tif(feature_dir, mask_dir, prob)
+    f_data, l_data = transform_tif(feature_dir, mask_dir, prob, patch_dir, filename, save_dir)
 
     return f_data, l_data
 
-def transform_tif(feature_dir, mask_dir, prob, fda=True): 
-    f_data, f_transform, f_crs = read_tif_file(feature_dir)
-    l_data, l_transform, l_crs = read_tif_file(mask_dir)
+def transform_tif(feature_dir, mask_dir, prob, patch_dir, filename, save_dir, fda=True): 
+    f_data, f_transform, f_crs, num_bands, dtype = read_tif_file(feature_dir)
+    l_data, l_transform, l_crs, num_bands, dtype = read_tif_file(mask_dir)
     data = [f_data, l_data]
+    __, height, width = f_data.shape
 
     #f_data = self.apply_fda(water=False) # Do not conduct FDA on mask
     data = apply_flip([f_data, l_data], True, prob["p_hflip"])
@@ -462,6 +466,25 @@ def transform_tif(feature_dir, mask_dir, prob, fda=True):
     #data = apply_rotation([f_data, l_data], 270, prob["p_270rot"])
     f_data = torch.from_numpy(data[0].copy())
     l_data = torch.from_numpy(data[1].copy())
+
+    if save_dir is not None: 
+        feat_out_path = save_dir + os.sep + 'features' + filename
+        label_out_path = save_dir + os.sep + 'labels' + filename
+
+        with rasterio.open(feat_out_path, 'w', driver='GTiff', height=height,
+                           width=width,
+                           dtype = data[0].dtype, 
+                           #crs = f_crs,
+                           count = 4,
+                           transform = f_transform) as dst: 
+            dst.write(data[0].copy())
+        with rasterio.open(label_out_path, 'w', driver='GTiff', height=height,
+                           width=width,
+                           dtype = data[1].dtype, 
+                           #crs = f_crs,
+                           count=1,
+                           transform = f_transform) as dst: 
+            dst.write(data[1].copy())
     
     return f_data, l_data
 
@@ -470,13 +493,13 @@ def apply_flip(data, horizontal, prob):
     if horizontal: 
         for i in range(len(data)): 
             if prob_succeed(prob): 
-                res.append(np.fliplr(data[i]))
+                res.append(np.flip(data[i], axis=2))
             else: 
                 res.append(data[i])
     else: 
         for i in range(len(data)): 
             if prob_succeed(prob): 
-                res.append(np.flipud(data[i]))
+                res.append(np.flip(data[i], axis=1))
             else: 
                 res.append(data[i])
     return res
@@ -486,15 +509,15 @@ def apply_rotation(data, deg, prob):
     if deg==90: 
         for i in range(len(data)): 
             if prob_succeed(prob): 
-                res.append(np.rot90(data[i], k=1, axes=(1,0)))
+                res.append(data[i].swapaxes(1, 2))
             else: 
                 res.append(data[i])
-    elif deg==270: # assumed to be 270 degrees: 
-        for i in range(len(data)): 
-            if prob_succeed(prob): 
-                res.append(np.rot90(data[i], k=1, axes=(0,1)))
-            else: 
-                res.append(data[i])
+    # elif deg==270: # assumed to be 270 degrees: 
+    #     for i in range(len(data)): 
+    #         if prob_succeed(prob): 
+    #             res.append(np.rot90(data[i], k=1, axes=(0,1)))
+    #         else: 
+    #             res.append(data[i])
     return res
 
 def prob_succeed(p): 
