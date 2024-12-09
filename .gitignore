@@ -21,3 +21,12 @@ data/CN/processed/train/features/*
 data/CN/processed/train/labels/*
 data/CN/processed/validation/features/*
 data/CN/processed/validation/labels/*
+
+data/style/BigEarthNet-S2/*
+data/style/ReferenceMaps/*
+
+data/style/images/general/*
+data/style/images/water/*
+
+data/style/tiles/general/*
+data/style/tiles/water/*
