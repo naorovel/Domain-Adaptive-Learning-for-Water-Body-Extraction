@@ -1,22 +1,25 @@
-import os  # If directory manipulation is involved (e.g., path joining, existence checks)
+import os  # If directory manipulation is involved (e.g., path joining, import 
 import numpy as np  # For numerical operations like stacking arrays
 import rasterio  # For reading .tif files
 from scipy.ndimage import map_coordinates
 from PIL import Image
+import random 
 
 class BigEarthDataProcessor:
 
-    big_earth_dir = "../data/style/BigEarthNet-S2"
-    ref_map_dir = "../data/style/ReferenceMaps"
-    water_tif = "../data/style/Water"
-    gen_style = "../data/style/all"
+    big_earth_dir = os.path.join("..", "data", "style", "BigEarthNet-S2")
+    ref_map_dir = os.path.join("..", "data", "style", "Reference_Maps")
 
     big_earth_dirs = []
     ref_map_dirs = []
+    
 
     def __init__(self): 
+        print("Getting big earth dirs...")
         self.get_big_earth_dirs()
+        print("Getting ref map dirs...")
         self.get_ref_map_dirs()
+        print("Creating style tifs...")
         self.create_style_tifs()
 
     def get_big_earth_dirs(self): 
@@ -48,7 +51,8 @@ class BigEarthDataProcessor:
                 self.ref_map_dirs.append(tif_dirs)
                         
     def create_style_tifs(self): 
-        for i in range(len(self.big_earth_dirs)): 
+        picked = random.sample(range(len(self.big_earth_dirs)), 50000)
+        for i in picked: 
             self.create_style_tif(self.big_earth_dirs[i], self.ref_map_dirs[i])
 
     def create_style_tif(self, big_earth_dirs, ref_map_dirs): 
@@ -71,7 +75,7 @@ class BigEarthDataProcessor:
 
         nir_data = self.build_nir_band(big_earth_dirs['path'], nir_tifs, red_data.shape)
 
-        return red_data, green_data, blue_data, nir_data
+        return blue_data, green_data, red_data, nir_data
                         
 
     def get_tif_data(self, path, filename, mask=False): 
@@ -99,8 +103,7 @@ class BigEarthDataProcessor:
         nir_filenames = []
         for file in filenames: 
             file_ending = file[-7:-4]
-            nir_endings = ['B05', 'B06', 'B07', 'B08', 'B8A']
-            if file_ending in nir_endings: 
+            if file_ending == 'B08': 
                 nir_filenames.append(file)
         return nir_filenames
 
@@ -182,4 +185,5 @@ def get_sample_style_tile(path, out_path):
     im.save(out_path)
 
 if __name__ == "__main__": 
+    print("Starting...")
     main()

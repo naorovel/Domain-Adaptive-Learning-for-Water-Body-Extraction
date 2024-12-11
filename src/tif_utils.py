@@ -9,6 +9,7 @@ import random
 from os.path import basename
 import glob
 from FDA.FDA import apply_fda_and_save
+import config
 
 random.seed(10)
 
@@ -41,10 +42,7 @@ def read_tif_file(file):
     with rasterio.open(file) as src:
         data = src.read()
         transform = src.transform
-        crs = src.crs,
-        num_bands = src.count
-        dtype = src.dtypes[0]
-    return data, transform, crs, num_bands, dtype
+    return data, transform 
 
 def compare_tif_images(tif1, tif2):
     """
@@ -356,7 +354,34 @@ def read_and_split_tif(file_path, output_dir, tile_size):
                 dst.write(tile)
             tile_count += 1
     
-    print("Tile splitting Done.")    
+    print("Tile splitting Done.")   
+
+def center_tile(path):
+    """
+    Centers the tile at `path` and saves it to the same directory. 
+    """
+    
+    # Read the GeoTIFF
+    with rasterio.open(path) as src:
+        data = src.read()  # Read all bands
+        transform = src.transform  # Original transform
+        crs = src.crs  # Coordinate reference system
+    
+    # Get properties of the data
+    _, height, width = data.shape  
+
+    mu = np.mean(data)
+    sigma = np.std(data)
+    data = (data - mu) / sigma
+
+    with rasterio.open(path, 'w', 
+                           width = width, 
+                           height = height,
+                           dtype=data.dtype, 
+                           count=4, 
+                           transform=transform) as dst:
+            dst.write(data) 
+
 
 def merge_tiles_to_tif(tile_folder, output_file, original_width, original_height, tile_size):
     """
@@ -444,49 +469,55 @@ def clear_dir(dir):
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-def transform_patch(random_sample_dir, patch_dir, filename, prob, save_dir): 
-    # Gets a path to a patch
-    feature_dir = random_sample_dir + os.sep + "features" + os.sep + patch_dir
-    mask_dir = random_sample_dir + os.sep + "labels" + os.sep + patch_dir
-
-    f_data, l_data = transform_tif(feature_dir, mask_dir, prob, patch_dir, filename, save_dir)
-
-    return f_data, l_data
-
-def transform_tif(feature_dir, mask_dir, prob, patch_dir, filename, save_dir, fda=True): 
-    f_data, f_transform, f_crs, num_bands, dtype = read_tif_file(feature_dir)
-    l_data, l_transform, l_crs, num_bands, dtype = read_tif_file(mask_dir)
-    data = [f_data, l_data]
+def transform_patch(feature_patch, label_patch, prob, fda, filename, save_dir, style_patch = ""): 
+    """
+    Applies transformations to patch, and saves in the original directory. 
+    """
+    # Open the TIF 
+    f_data, f_transform = read_tif_file(feature_patch)
+    l_data, __ = read_tif_file(label_patch)
     __, height, width = f_data.shape
 
-    #f_data = self.apply_fda(water=False) # Do not conduct FDA on mask
-    data = apply_flip([f_data, l_data], True, prob["p_hflip"])
-    data = apply_flip([f_data, l_data], False, prob["p_vflip"])
-    data = apply_rotation([f_data, l_data], 90, prob["p_90rot"])
-    #data = apply_rotation([f_data, l_data], 270, prob["p_270rot"])
+    data = [f_data, l_data]
+
+    # Apply FDA
+    if fda: 
+        s_data, __ = read_tif_file(style_patch)
+        data = apply_fda(data, s_data)
+
+    # Apply transformations
+    data = apply_flip(data, True, prob["p_hflip"])
+    data = apply_flip(data, False, prob["p_vflip"])
+    data = apply_rotation(data, 90, prob["p_90rot"])
+
     f_data = torch.from_numpy(data[0].copy())
     l_data = torch.from_numpy(data[1].copy())
 
-    if save_dir is not None: 
-        feat_out_path = save_dir + os.sep + 'features' + filename
-        label_out_path = save_dir + os.sep + 'labels' + filename
+    # Temp save dir
+    feat_out_path = os.path.join(save_dir, 'features', filename)
+    label_out_path = os.path.join(save_dir, 'labels', filename)
 
-        with rasterio.open(feat_out_path, 'w', driver='GTiff', height=height,
-                           width=width,
-                           dtype = data[0].dtype, 
-                           #crs = f_crs,
-                           count = 4,
-                           transform = f_transform) as dst: 
-            dst.write(data[0].copy())
-        with rasterio.open(label_out_path, 'w', driver='GTiff', height=height,
-                           width=width,
-                           dtype = data[1].dtype, 
-                           #crs = f_crs,
-                           count=1,
-                           transform = f_transform) as dst: 
-            dst.write(data[1].copy())
-    
-    return f_data, l_data
+    # Save the TIF
+    with rasterio.open(feat_out_path, 'w', driver='GTiff', height=height,
+                       width=width,
+                       dtype = data[0].dtype, 
+                       count = 4,
+                       transform = f_transform) as dst: 
+        dst.write(data[0].copy())
+    with rasterio.open(label_out_path, 'w', driver='GTiff', height=height,
+                       width=width,
+                       dtype = data[1].dtype, 
+                       count=1,
+                       transform = f_transform) as dst: 
+        dst.write(data[1].copy())
+
+
+def apply_fda(data, style_dir):
+    # Only apply FDA to first element of data
+    #fda, no_fda = process_tiles_with_fda()    
+
+    return data
+
 
 def apply_flip(data, horizontal, prob):
     res = []
@@ -512,12 +543,6 @@ def apply_rotation(data, deg, prob):
                 res.append(data[i].swapaxes(1, 2))
             else: 
                 res.append(data[i])
-    # elif deg==270: # assumed to be 270 degrees: 
-    #     for i in range(len(data)): 
-    #         if prob_succeed(prob): 
-    #             res.append(np.rot90(data[i], k=1, axes=(0,1)))
-    #         else: 
-    #             res.append(data[i])
     return res
 
 def prob_succeed(p): 
@@ -649,66 +674,6 @@ def process_all_tiles(folder_path, output_base_dir, point, subimage_width, subim
         except Exception as e:
             print(f"Error processing tile {tile_filename}: {e}")
 
-
-def process_tiles_with_fda(input_path, output_path, style_folder, num_folders, apply_probability=0.75):
-    """
-    Process .tif tiles from a specified number of folders (each containing 9 .tif tiles),
-    applying FDA with a specified probability using a randomly chosen style image from
-    a style folder. Tiles not processed with FDA are copied directly. Saves outputs with
-    the same names and subfolder structure as inputs.
-
-    Parameters:
-    - input_path: str, path to the folder containing subfolders with .tif tiles.
-    - output_path: str, path to the folder where output .tif tiles will be saved.
-    - style_folder: str, path to the folder containing style images for FDA.
-    - num_folders: int, number of subfolders (each containing 9 tiles) to process.
-    - apply_probability: float, probability (0-1) of applying FDA to each tile.
-
-    Returns:
-    - A tuple (fda_count, no_fda_count) indicating the number of tiles processed with and without FDA.
-    """
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-
-    # Get a list of all subfolders in the input_path
-    subfolders = sorted([f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))])
-    if not subfolders:
-        raise ValueError("No subfolders found in the specified input folder.")
-
-    # Limit to the specified number of subfolders
-    subfolders = subfolders[:num_folders]
-
-    # Get a list of style images from the style folder
-    style_images = [os.path.join(style_folder, f) for f in os.listdir(style_folder) if f.endswith((".png", ".jpg"))]
-    if not style_images:
-        raise ValueError("No style images found in the specified style folder.")
-
-    fda_count = 0
-    no_fda_count = 0
-
-    for subfolder in subfolders:
-        subfolder_path = os.path.join(input_path, subfolder)
-        output_tile_subfolder = os.path.join(output_path, subfolder)
-
-        # Ensure the output subfolder exists
-        if not os.path.exists(output_tile_subfolder):
-            os.makedirs(output_tile_subfolder)
-
-        for filename in os.listdir(subfolder_path):
-            if filename.endswith(".tif"):
-                source_tile_path = os.path.join(subfolder_path, filename)
-                output_tile_path = os.path.join(output_tile_subfolder, filename)
-
-                if random.random() < apply_probability:  # Apply FDA with the given probability
-                    # Randomly select a style image
-                    random_style_image = random.choice(style_images)
-                    apply_fda_and_save(source_tile_path, random_style_image, output_tile_path)
-                    fda_count += 1
-                else:  # Directly copy the file
-                    shutil.copy(source_tile_path, output_tile_path)
-                    no_fda_count += 1
-
-    return fda_count, no_fda_count
 
 def move_dirs(source_dir_list, source_dir, dest):
     for sub_dir in source_dir_list:

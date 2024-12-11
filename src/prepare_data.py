@@ -1,3 +1,8 @@
+"""
+THIS FILE IS NO LONGER IN USE
+
+"""
+
 import os  # If directory manipulation is involved (e.g., path joining, existence checks)
 import torch  # For tensor operations
 import numpy as np  # For numerical operations like stacking arrays
@@ -53,6 +58,8 @@ def get_train_data():
                               )
     
     # train_data.save_train_baseline(processed_train_dir)
+    train_data.get_batches(16)
+    next_batch = train_data.get_next_batch()
     
     print("Finished generating training data.")
     return train_data
@@ -83,7 +90,7 @@ def get_test_data():
 
 def main(): 
     get_train_data()
-    get_validation_data(0.1)
+    #get_validation_data(0.1)
     #get_test_data()
 
 if __name__ == "__main__": 

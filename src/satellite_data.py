@@ -1,3 +1,7 @@
+"""
+THIS FILE IS NO LONGER IN USE
+"""
+
 import math
 import torch  # For tensor operations
 from torch.utils.data import Dataset  # Base class for custom PyTorch datasets
@@ -14,10 +18,11 @@ class SatelliteData(Dataset):
     feature_tiles = []
     label_tiles = []
     patches = []
-    target_dir = "../data/Style"
+    target_dir = "../data/style"
     validation_dataset: any = None
     validation_dataset_dir = ""
     batches = []
+    style_dir = "../data/style/tiles"
 
     def __init__(self, feature_dir, label_dir,
                  feature_tile_dir, label_tile_dir,
@@ -54,7 +59,7 @@ class SatelliteData(Dataset):
             if "Y".lower() == input("Original split tiles in this directory already exist. Would you like to regenerate the dataset? [Y/n] ").lower():
                 self.generate_split_tiles()
                 self.read_split_tiles()
-                self.feature_tiles = self.normalize_tiles(self.feature_tiles)
+                self.feature_tiles = self.normalize_tiles(self.feature_tiles) # TODO: Should calculate mean and standard deviation for each tile - put this in the data loader - this is more "centering" the data
         
             if random_sample:
                 self.generate_patches()
@@ -74,7 +79,7 @@ class SatelliteData(Dataset):
         patch_list = self.get_patch_dirs()
         for patch in patch_list:
             filename = patch[5:]
-            transform_patch(self.random_sample_dir, patch, filename, self.prob, save_dir=dir)
+            transform_patch_old(self.random_sample_dir, patch, filename, self.prob, save_dir=dir)
 
     def get_batches(self, batch_size):
         print(f"Creating batches of size {batch_size}...")
@@ -85,13 +90,27 @@ class SatelliteData(Dataset):
         self.batches = batch_list
         return batch_list  
     
+    def get_batch_style_tiles(self, num): 
+        water_tiles = os.listdir(self.style_dir+os.path.sep+"water")
+        water_tiles = [self.style_dir+os.path.sep+"water"+os.path.sep+name for name in water_tiles]
+
+        general_tiles = os.listdir(self.style_dir + os.path.sep + "general")
+        general_tiles = [self.style_dir+os.path.sep+"general"+os.path.sep+name for name in general_tiles]
+        
+        all_tiles = water_tiles + general_tiles
+
+        random_style_tiles = random.sample(all_tiles, num)
+        
+        return random_style_tiles
+
     def get_next_batch(self):
         print(f"Getting next batch...")
         curr_batch = self.batches.pop()
         processed_batch = []
-        for patch in curr_batch: 
-            print(f"Transforming TIF of {patch}...")
-            processed_batch.append(transform_patch(self.random_sample_dir, patch, self.prob))
+        style_tiles = self.get_batch_style_tiles(len(curr_batch))
+        for i in range(len(curr_batch)): 
+            print(f"Transforming TIF of {curr_batch[i]}...")
+            processed_batch.append(transform_patch_old(self.random_sample_dir, curr_batch[i], style_tiles[i], self.prob, self.processed_patch_dir, fda_path=style_tiles[i]))
         return processed_batch
 
     def generate_split_tiles(self):
@@ -172,15 +191,15 @@ class SatelliteData(Dataset):
         num_patches = sum([len(files) for r, d, files in os.walk(self.random_sample_dir+"/features")])
         print(f"Generated {num_patches} patches.")
 
-    def apply_fda(self, water): 
-        """
-        Assume that output directory has been cleaned/is empty (except for .gitkeep). 
-        """
-        print(f"Processing patches with FDA with p={self.prob['p_FDA']}.")
-        fda, no_fda = process_tiles_with_fda(self.random_sample_dir+"/features", self.random_sample_dir + "/features", self.target_dir, len(os.listdir(self.random_sample_dir)), apply_probability=self.prob["p_FDA"])
+    # def apply_fda(self, water): 
+    #     """
+    #     Assume that output directory has been cleaned/is empty (except for .gitkeep). 
+    #     """
+    #     print(f"Processing patches with FDA with p={self.prob['p_FDA']}.")
+    #     fda, no_fda = process_tiles_with_fda(self.random_sample_dir+"/features", self.random_sample_dir + "/features", self.target_dir, len(os.listdir(self.random_sample_dir)), apply_probability=self.prob["p_FDA"])
 
-        print(f"Tiles with FDA applied: {fda}")
-        print(f"Tiles without FDA applied: {no_fda}")
+    #     print(f"Tiles with FDA applied: {fda}")
+    #     print(f"Tiles without FDA applied: {no_fda}")
  
     def create_validation_set(self, split):
         print("Creating validation set...")
@@ -188,6 +207,8 @@ class SatelliteData(Dataset):
         self.validation_dataset_dir = self.validation_dataset_dir + "/validation"
 
         num_tiles = round(split * len(os.listdir(self.feature_tile_dir)))
+
+        # TODO: Need to shuffle these tiles
         val_feature_tiles = os.listdir(self.feature_tile_dir)[-num_tiles:]
         val_label_tiles = os.listdir(self.label_tile_dir)[-num_tiles:]
 
