@@ -55,7 +55,7 @@ class TrainingData(SatelliteData):
 
     def generate_new_transformed(self, fda=False, water=True): 
         save_dir = self.get_processed_dir(fda, water)
-        self.generate_patches()
+        #self.generate_patches()
         self.process_patches(fda, water)
 
     def generate_patches(self): 
@@ -86,6 +86,8 @@ class TrainingData(SatelliteData):
 
         filenames = [patch.split(os.path.sep)[-1] for patch in feature_patches]
 
+        print("Got directories + filenames")
+        print(f"fda: {fda}")
         for i in range(num_patches): 
             if fda: 
                 transform_patch(feature_patches[i], label_patches[i], self.prob, fda, filenames[i], self.processed_dir, style_patches[i])
@@ -112,13 +114,18 @@ class TrainingData(SatelliteData):
         """
         Get complete paths for FDA tiles for styling
         """
+        patches = []
         if fda and water_only: # Water only
-            return self.get_tile_paths(self.style_dir_water)
+            print("Water only")
+            patches = self.get_tile_paths(self.style_dir_water)
 
         elif fda and not water_only: # All tiles
-            return self.get_tile_paths(self.style_dir_water) + self.get_tile_paths(self.style_dir_all)
+            print("All tiles")
+            patches =  self.get_tile_paths(self.style_dir_water) + self.get_tile_paths(self.style_dir_all)
         else: 
             return []
+        
+        return random.sample(patches, n)
 
     def move_to_processed(self, fda, water_only): 
         """
@@ -138,7 +145,7 @@ class TrainingData(SatelliteData):
         """
         if not fda and not water: 
             return self.get_processed_baseline_dir()
-        elif fda and not water: 
+        elif fda and water: 
             return self.get_processed_water_dir()
         else:
             return self.get_processed_all_dir()

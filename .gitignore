@@ -5,6 +5,7 @@ data/BZ/tiles/labels/*
 data/BZ/tiles/merge/*
 data/BZ/feature.tif
 data/BZ/label.tif
+
 data/BZ/processed/test/features/*
 data/BZ/processed/test/labels/*
 
@@ -21,8 +22,15 @@ data/CN/tiles/validation/labels/*
 
 data/CN/processed/train/features/*
 data/CN/processed/train/labels/*
+
 data/CN/processed/train/baseline/features/*
 data/CN/processed/train/baseline/labels/*
+
+data/CN/processed/train/all/features/*
+data/CN/processed/train/all/labels/*
+
+data/CN/processed/train/water_only/labels/*
+data/CN/processed/train/water_only/features/*
 
 data/CN/processed/validation/features/*
 data/CN/processed/validation/labels/*
@@ -39,4 +47,6 @@ data/style/tiles/water/*
 data/style/style.zip
 data/CN/processed/validation.zip
 data/CN/processed/train/baseline_train.zip
+data/CN/processed/train/water_only.zip
+data/CN/processed/train/all_train.zip
 data/BZ/processed/test.zip

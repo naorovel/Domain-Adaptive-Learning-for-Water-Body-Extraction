@@ -6,7 +6,7 @@ def get_train_validation_data():
     train_data = TrainingData(512)
     #train_data.generate_new()
     #validation_data = train_data.generate_new_validation()
-    train_data.generate_new_transformed(fda=False, water=False)
+    train_data.generate_new_transformed(fda=True, water=False)
 
 def get_test_data(): 
     print("Getting test data")

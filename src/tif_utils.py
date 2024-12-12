@@ -8,7 +8,7 @@ from rasterio.transform import Affine
 import random
 from os.path import basename
 import glob
-from FDA.FDA import apply_fda_and_save
+from FDA.FDA import apply_fda_data
 import config
 
 random.seed(10)
@@ -478,8 +478,8 @@ def transform_patch(feature_patch, label_patch, prob, fda, filename, save_dir, s
     l_data, __ = read_tif_file(label_patch)
     __, height, width = f_data.shape
 
+    print(filename)
     data = [f_data, l_data]
-
     # Apply FDA
     if fda: 
         s_data, __ = read_tif_file(style_patch)
@@ -512,10 +512,10 @@ def transform_patch(feature_patch, label_patch, prob, fda, filename, save_dir, s
         dst.write(data[1].copy())
 
 
-def apply_fda(data, style_dir):
+def apply_fda(data, style_data):
     # Only apply FDA to first element of data
     #fda, no_fda = process_tiles_with_fda()    
-
+    data = apply_fda_data(data, style_data)
     return data
 
 

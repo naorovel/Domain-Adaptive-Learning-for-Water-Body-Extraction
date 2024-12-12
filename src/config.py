@@ -61,7 +61,7 @@ processed_dirs = {
  
 style_dirs = {
     'style_dir_water': '../data/style/tiles/water',
-    'style_dir_all': '../data/style/tiles/all',
+    'style_dir_all': '../data/style/tiles/general',
 }
 
 training_prob = {

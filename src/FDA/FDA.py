@@ -2,6 +2,8 @@ import numpy as np
 from PIL import Image
 from .utils import FDA_source_to_target_np
 import rasterio
+from scipy.ndimage import map_coordinates
+
 
 def apply_fda_and_save(source_path, target_path, output_path):
     """
@@ -150,6 +152,56 @@ def apply_fda(source_data, target_path):
     #print(f"Result saved to {output_path}")
 
 # Example usage
+
+def apply_fda_data(data, s_data): 
+    """
+    Applies FDA to data using style_data. 
+    """
+    f_data = data[0]
+    num_bands = 4 #b,g,r,nir
+    src = np.empty_like(data[0])
+    target = np.empty_like(data[0])
+    for i in range(num_bands):
+        src_band = normalize_band(f_data[i])
+        src[i] = src_band
+        target_band = resize_band(src_band, s_data[i])
+        target_band = normalize_band(target_band)
+        target[i] = target_band
+
+    # Apply FDA to bands
+    fda_result = FDA_source_to_target_np(src, target, L=0.01)
+
+    for i in range(num_bands):
+        fda_result[i] = normalize_band(fda_result[i])
+
+    # Ensure FDA result is in [0, 255] range
+    fda_result = np.clip(fda_result, 0, 255).astype(np.uint8)
+
+    return [fda_result, data[1]]
+
+        
+def resize_band(src, s_data):
+    """
+    Resizes s_data to the size of src.
+    """
+    reshaped = []
+    if (s_data.shape != src.shape):
+        for original_length, new_length in zip(s_data.shape, (src.shape)):
+            reshaped.append(np.linspace(0, original_length-1, new_length))
+        coords = np.meshgrid(*reshaped, indexing='ij')
+        return map_coordinates(s_data, coords)
+    
+
+def normalize_band(band):
+    band = band.astype(np.float64)
+    if band.max() != band.min():
+        band = ((band - band.min()) / (band.max() - band.min())) * 255
+    else: 
+        band = ((band - band.min())/ (1e-5)) * 255
+    band = band.astype(np.uint8)
+    return band
+
+
 '''
 source = "../../data/CN/tiles/features/tile_0000.tif"
 target = "Style/000012.png"
