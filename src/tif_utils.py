@@ -521,15 +521,16 @@ def apply_fda(data, style_data):
 
 def apply_flip(data, horizontal, prob):
     res = []
+    p_success = prob_succeed(prob)
     if horizontal: 
         for i in range(len(data)): 
-            if prob_succeed(prob): 
+            if p_success: 
                 res.append(np.flip(data[i], axis=2))
             else: 
                 res.append(data[i])
     else: 
         for i in range(len(data)): 
-            if prob_succeed(prob): 
+            if p_success: 
                 res.append(np.flip(data[i], axis=1))
             else: 
                 res.append(data[i])
@@ -537,9 +538,10 @@ def apply_flip(data, horizontal, prob):
 
 def apply_rotation(data, deg, prob):
     res = []
+    p_success = prob_succeed(prob)
     if deg==90: 
         for i in range(len(data)): 
-            if prob_succeed(prob): 
+            if p_success: 
                 res.append(data[i].swapaxes(1, 2))
             else: 
                 res.append(data[i])
